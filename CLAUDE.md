@@ -88,7 +88,8 @@ A pull request that breaks one does not merge.
   `@JvmStatic` on companion and object members callers use. Hooks and callbacks are `fun interface`.
   No `suspend` or `Flow` in the user-facing API, only in extension interfaces SDK developers implement.
 - KDoc on every public symbol, with a short usage example when it prevents misuse.
-- Public only for cross-module use: annotate `@RubiconInternal` (`@RequiresOptIn`).
+- Public only for cross-module use: annotate `@RubiconInternal` (`@RequiresOptIn`). SDK code opts in
+  module-wide; such declarations and `com.rubicon.analytics.internal` stay out of the `.api` files.
 - Explicit API mode is on. Run `apiDump` and commit the `.api` diff: a diff there is the definition of
   a public API change and is named at the top of the pull request.
 
@@ -154,7 +155,8 @@ A pull request that breaks one does not merge.
   `develop` (no step number) and one pull request, squash-merged into `develop`. Conventional Commits
   (`feat(queue): ...`, `build: ...`).
 - Before committing: `ktlintFormat`, then `./gradlew check` green (it includes `test` and `apiCheck`).
-- Commit locally and stop for review; push and open the pull request only after the user approves.
+- Stop for review with the changes uncommitted; commit, push and open the pull request only after
+  the user approves.
   Never merge, never push to `develop` or `master`.
 - The description follows `.github/pull_request_template.md`: public API changes first, then problem,
   change, decisions implemented, how it was tested.

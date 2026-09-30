@@ -2,7 +2,8 @@
 
 Pure Kotlin/JVM, no Android import. The platform comes through the internal `Platform`; tests replace
 its clock, stores, network monitor, HTTP transport, dispatchers and random through the
-`@RubiconInternal` factory overload (Configuration 5). Property validation and `beforeSend`
+`@RubiconInternal` factory overload (Configuration 5). The fakes live in `testFixtures`, package
+`com.rubicon.analytics.testing`, gathered by `TestPlatform`. Property validation and `beforeSend`
 rules are in the root `CLAUDE.md`.
 
 ## Event model

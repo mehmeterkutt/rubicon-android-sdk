@@ -46,8 +46,8 @@ on the Disk Persistence page, and so on.
    decision, tell the user which Confluence page and which `CLAUDE.md` rule need the change; update
    them after approval.
 6. Done means every item of section 6 (Definition of done) holds. Then tick the step in section 14,
-   fill its rows in the traceability table (section 13), commit and stop for review: the user reviews
-   the local branch first. Push and open the pull request only after the user approves. Never merge,
+   fill its rows in the traceability table (section 13) and stop for review with the changes
+   uncommitted. Commit, push and open the pull request only after the user approves. Never merge,
    and never push to `develop` or `master`.
 7. Documents and code comments are in English, without emoji.
 
@@ -683,7 +683,7 @@ release.
 | Public API 3 | `Map<String, Any?>` validated at the boundary | 2.5 |  |
 | Public API 4 | `beforeSend` list fixed at creation, fail-closed | 3.2, 6.3 |  |
 | Public API 5 | Public methods return `Unit` | 3.3 |  |
-| Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1 | Build: `sdk-core` is `kotlin("jvm")`, `sdk-android` depends on it with `api`; `BuildInfoTest`, `RobolectricSetupTest` |
+| Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1, 2.1 | Build: `sdk-core` is `kotlin("jvm")`, `sdk-android` depends on it with `api`; `BuildInfoTest`, `RobolectricSetupTest`; 2.1: `TestPlatformAccessTest` |
 | Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 | 1.1: `explicitApi()` and `apiCheck` in `check` (gates) |
 | Public API 8 | Vocabulary and read-only `deviceId` | 3.3, 6.1, 6.5 |  |
 | Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3, 6.7 |  |
@@ -697,7 +697,7 @@ release.
 | Configuration 2 | One class, small groups, tuning internal | 3.1 |  |
 | Configuration 3 | Only `apiKey` required, factory validation, one instance, main process | 3.1, 6.7, 7.1 |  |
 | Configuration 4 | Snapshot and freeze | 3.1 |  |
-| Configuration 5 | Public hatches, internal `Platform`, `HttpURLConnection`, OkHttp `compileOnly` | 2.1, 5.1, 7.6 |  |
+| Configuration 5 | Public hatches, internal `Platform`, `HttpURLConnection`, OkHttp `compileOnly` | 2.1, 5.1, 7.6 | 2.1: `FakeEnvironmentTest.test platform` (all), `TestPlatformAccessTest` |
 | Configuration 6 | No platform types in configuration | 3.1 |  |
 | Identity 1 | `deviceId` and `userId` in files outside backup | 4.1, 6.1, 7.1 |  |
 | Identity 2 | Implicit merge: both ids on every event | 3.2, 6.1 |  |
@@ -738,7 +738,7 @@ release.
 | Disk 3 | JSON Lines equal to the wire event, `v1` directory | 4.2, 2.4 |  |
 | Disk 4 | One `write()` per event, fsync points, `.tmp` recovery | 4.2, 7.4, 8.1 |  |
 | Disk 5 | Corrupt lines skipped, unreadable segments retried then deleted | 4.2 |  |
-| Disk 6 | No encryption, storage not replaceable | 2.1 |  |
+| Disk 6 | No encryption, storage not replaceable | 2.1 | 2.1: `EventStore`, `KeyValueStore` are `@RubiconInternal` (opt-in error for apps); `InMemoryStoresTest` |
 | Disk 7 | Atomic person and device stores with `v` | 4.1 |  |
 | Serialization 1 | `org.json` `compileOnly`, one conversion layer | 1.1, 2.4 | 1.1: `android-json` `compileOnly` in `sdk-core`, absent from the release runtime classpath |
 | Serialization 2 | Conversion table, no `java.time` | 2.5, 1.1 | 1.1: `SourceScannerTest.java time rule` (all), `SourceRulesPluginTest.check fails on a planted java time import and names the file and line` |
@@ -776,7 +776,7 @@ release.
 - [x] 0 Open decisions D1 to D13 answered and recorded in section 15
 - [x] 1.1 Scaffold
 - [x] 1.2 CLAUDE.md files
-- [ ] 2.1 Platform and test fixtures
+- [x] 2.1 Platform and test fixtures
 - [ ] 2.2 Logging infrastructure
 - [ ] 2.3 Identifiers and time
 - [ ] 2.4 JSON layer
@@ -834,6 +834,10 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-09-30 | 0 | D13 `onNewIntent` without `androidx.activity` | As recommended: `androidx.activity` 1.7.0 `compileOnly`, behind a class presence check; `-dontwarn androidx.activity.**` in `consumer-rules.pro`. | - |
 | 2026-09-30 | 1.1 | Branch names | `feature/<topic>`, without the step number. | Working agreement 2 |
 | 2026-09-30 | 1.1 | When to push | Each step is committed locally and reviewed by the user; push and pull request only after approval. | Working agreement 6 |
+| 2026-09-30 | 2.1 | When to commit | The user reviews the uncommitted changes; commit, push and pull request follow the approval. | Working agreement 6, root `CLAUDE.md` Git |
+| 2026-09-30 | 2.1 | `@RubiconInternal` in the `.api` files | Left out: `nonPublicMarkers` for the annotation and `ignoredPackages` for `com.rubicon.analytics.internal` (nested types carry no annotation). The `.api` files list only what applications can use; both modules ship together. SDK code opts in module-wide (`-opt-in`). | Root `CLAUDE.md` Public API |
+| 2026-09-30 | 2.1 | Visibility of `HttpResult` and `FailureKind` | Public with `@RubiconInternal`, like every `Platform` type, because `Platform` is public for `sdk-android` (Configuration 5, Disk 6). HTTP decision 4 shows them `internal`; its example needs this change. | HTTP page, decision 4 (pending approval) |
+| 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |
 | 2026-09-30 | 1.1 | `sdk-android` namespace | `com.rubicon.analytics.android`, used only for the generated `R` class. | - |
