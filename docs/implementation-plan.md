@@ -703,8 +703,8 @@ release.
 | Event Model 1 | Top level, `properties`/`traits`, `context` ownership | 3.2, 6.3 |  |
 | Event Model 2 | Sealed `TrackEvent`, `ScreenEvent`, `IdentifyEvent`; `type` on the wire | 3.2, 8.4 |  |
 | Event Model 3 | Immutable normalized maps, validated twice | 2.5, 6.3 |  |
-| Event Model 4 | `message_id` UUIDv7, never regenerated | 2.3, 6.3, 6.4 |  |
-| Event Model 5 | Epoch ms, ISO dates in properties, `sent_at` per attempt | 2.3, 6.4 |  |
+| Event Model 4 | `message_id` UUIDv7, never regenerated | 2.3, 6.3, 6.4 | 2.3: `UuidV7GeneratorTest` (all) |
+| Event Model 5 | Epoch ms, ISO dates in properties, `sent_at` per attempt | 2.3, 6.4 | 2.3: `IsoDatesTest` (all) |
 | Event Model 6 | Public classes, internal constructors, limited `copy` | 3.2 |  |
 | Configuration 1 | Code plus restrict-only remote, allowlist, next launch, two immediate flags | 5.3 |  |
 | Configuration 2 | One class, small groups, tuning internal | 3.1 |  |
@@ -746,7 +746,7 @@ release.
 | Disk 1 | Segmented append log, one segment is one batch | 4.2 |  |
 | Disk 2a | Everything under `noBackupFilesDir/rubicon/` | 4.1, 4.2, 7.1 |  |
 | Disk 2b | Fixed-width index from the directory | 4.2 |  |
-| Disk 2c | One directory per key, others deleted (`api_key_changed`) | 4.2 |  |
+| Disk 2c | One directory per key, others deleted (`api_key_changed`) | 2.3, 4.2 | 2.3: `HttpDatesAndHashingTest.sha-256` (all) |
 | Disk 2d | Main process only | 7.1, 8.1 |  |
 | Disk 3 | JSON Lines equal to the wire event, `v1` directory | 4.2, 2.4 |  |
 | Disk 4 | One `write()` per event, fsync points, `.tmp` recovery | 4.2, 7.4, 8.1 |  |
@@ -756,7 +756,7 @@ release.
 | Serialization 1 | `org.json` `compileOnly`, one conversion layer | 1.1, 2.4 | 1.1: `android-json` `compileOnly` in `sdk-core`, absent from the release runtime classpath |
 | Serialization 2 | Conversion table, no `java.time` | 2.5, 1.1 | 1.1: `SourceScannerTest.java time rule` (all), `SourceRulesPluginTest.check fails on a planted java time import and names the file and line` |
 | Serialization 3 | Size limits | 2.5, 6.3 |  |
-| Serialization 4 | snake_case, epoch ms, own ISO formatter | 2.3, 3.2 |  |
+| Serialization 4 | snake_case, epoch ms, own ISO formatter | 2.3, 3.2 | 2.3: `IsoDatesTest` (all) |
 | Serialization 5 | Streamed body, golden files, independent parser | 3.2, 6.4, 8.4 |  |
 | HTTP 1 | `HttpURLConnection` behind `HttpTransport` | 5.1 |  |
 | HTTP 2 | Always gzip, `Content-Length` | 5.1 |  |
@@ -766,7 +766,7 @@ release.
 | HTTP 6 | No transport extras, blocked-host check | 5.1 |  |
 | Retry 1 | Five groups, only a bad batch deleted | 5.2 |  |
 | Retry 2 | Backoff table with jitter, 1 h for configuration problems | 5.2 |  |
-| Retry 3 | `Retry-After` cap and floor, poison-batch rule | 5.2, 6.4 |  |
+| Retry 3 | `Retry-After` cap and floor, poison-batch rule | 2.3, 5.2, 6.4 | 2.3: `HttpDatesAndHashingTest.http dates` (all) |
 | Retry 4 | 413 as configuration problem, server answers 200 | 5.2 |  |
 | Retry 5 | Pipeline wait and per-segment attempts persisted, clock guard | 4.1, 5.2 |  |
 | Retry 6 | One default-network callback, `INTERNET` without `VALIDATED` | 7.2 |  |
@@ -792,7 +792,7 @@ release.
 - [x] 2.1 Platform and test fixtures
 - [x] 2.2 Logging infrastructure
 - [x] 2.2a Android API check for `sdk-core`
-- [ ] 2.3 Identifiers and time
+- [x] 2.3 Identifiers and time
 - [ ] 2.4 JSON layer
 - [ ] 2.5 Property validation and normalization
 - [ ] 3.1 Configuration
@@ -863,6 +863,8 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-09-30 | 2.2 | Message format | A WARN or ERROR message starts with its code: `HOST_BLOCKED: ...`. | - |
 | 2026-09-30 | 2.2 | The platform's default logger | `Platform.logger` (Logcat on Android, `NoOpLogger` on the JVM), also the fallback of a throwing logger. | - |
 | 2026-09-30 | 2.2a | Java API that Android lacks at `minSdk` in `sdk-core` | New step 2.2a: Java 8 API at compile time and Animal Sniffer with `gummy-bears-api-21`, build-only. | Root `CLAUDE.md` Dependencies |
+| 2026-09-30 | 2.3 | Obsolete HTTP date forms in `Retry-After` (RFC 850, asctime) | Not parsed; the header then counts as absent. The day name of an IMF-fixdate is not checked; a leap second counts as the next minute. Confirmed by the user. | - |
+| 2026-09-30 | 2.3 | UUIDv7 counter | RFC 9562 method 1 with a 42-bit counter (`rand_a` and the top 30 bits of `rand_b`), seeded with its top bit clear each millisecond; on overflow the timestamp moves one millisecond ahead; a clock moved back keeps the last timestamp. | - |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

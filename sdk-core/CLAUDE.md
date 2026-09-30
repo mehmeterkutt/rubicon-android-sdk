@@ -155,7 +155,7 @@ rules are in the root `CLAUDE.md`.
   `TrafficStats` tagging.
 - Never throws: `HttpResult` = `Success`, `HttpError(code, body, retryAfterMs)`, `NetworkFailure(kind)`
   (`TIMEOUT|DNS|CONNECT|TLS|IO|BLOCKED|UNEXPECTED`). Read at most 4 KB, always drain and close.
-  `Retry-After` in seconds or HTTP date. Only after `CONNECT`/`DNS` failures resolve the host:
+  `Retry-After` in seconds or HTTP date (IMF-fixdate only, `HttpDates`). Only after `CONNECT`/`DNS` failures resolve the host:
   loopback or any-local -> `BLOCKED` (skipped for `localhost` and IPs). Never log bodies.
 - One `when` over `HttpResult` (Retry 1, 4): 2xx delete. `TIMEOUT`, `CONNECT`, `IO`, `DNS`, 408, 5xx
   except 501/505, 1xx: keep, back off. 429, or 503 with `Retry-After`: pause. 400, 422, other 4xx:
