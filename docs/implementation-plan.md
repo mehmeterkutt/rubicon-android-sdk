@@ -1,0 +1,826 @@
+# Rubicon Android SDK: Implementation Plan
+
+This plan takes the Rubicon analytics SDK from an empty repository to a release candidate, one pull
+request at a time. It is written for an implementing session that starts with a clean context: it
+names what to read, what to build, what to test and when a step is done. It does not restate the
+design; the design lives in Confluence and is binding.
+
+## 1. Sources of truth
+
+| Source | What it holds | How to read it |
+|---|---|---|
+| Confluence, space SD, page "Analytics SDK Design Decisions" (id `3112961`) and its 14 child pages | Every design decision with its reasoning. Binding for implementation. | Atlassian MCP, `cloudId` `rubiconn.atlassian.net`, `getConfluencePage` with `contentFormat: "markdown"` |
+| `docs/claude-md-seed.md` in this repository | The day-to-day rules distilled from those pages (451 lines). Split into the repository's `CLAUDE.md` files in step 1.2, then deleted. | Read in full once, in step 1.2 |
+| This file | Order of work, tests, done criteria, progress | Read the Status section at the start of every session |
+| `~/Projects/analytics-sdk/{posthog-android, analytics-kotlin, amplitude-kotlin, mixpanel-android, snowplow-android-tracker}` | Source of the five reference SDKs (analytics-kotlin is Segment) | Read-only, for implementation patterns. Where a reference SDK and a decision disagree, the decision wins. |
+| `~/Projects/analytics-sdk/demo-app` (repo `rubicon-team/rubicon-android-demo`) | Host app and fake backend (`fake-server/server.py`) | Used in phase 9 |
+
+Decision pages (link: `https://rubiconn.atlassian.net/wiki/spaces/SD/pages/<id>`):
+
+| Block | Page id | Block | Page id |
+|---|---|---|---|
+| Public API | 3211265 | Queue with Flush Policy | 4161566 |
+| Event Model | 3407873 | Disk Persistence | 4587522 |
+| Configuration | 2981890 | Serialization | 4358166 |
+| Identity Management | 3833857 | HTTP Client with Compression | 3964956 |
+| Context Enrichment | 3899401 | Retry and Network Awareness | 4096005 |
+| Session Management | 4161537 | Privacy Controls | 4325427 |
+| Automatic Lifecycle Events | 4325379 | Logging | 4554779 |
+
+In this plan "Queue 5" means decision 5 on the Queue with Flush Policy page, "Disk 2d" decision 2d
+on the Disk Persistence page, and so on.
+
+## 2. Working agreement for the implementing session
+
+1. At the start of a session read `CLAUDE.md`, then section 14 (Status) of this file, and take the
+   first unchecked step. Do not work on two steps at once.
+2. One step is one branch (`feature/<step-id>-<topic>`, from `develop`) and one pull request. A step
+   that turns out too big is split, and the split is written into this file first.
+3. Before writing code for a step, read the decisions listed under "Read" in full, not only their
+   summary rows. Read the reference SDK code named there when the step says so.
+4. Write the tests listed under "Tests" before or together with the code. A listed test may be
+   renamed or merged; it may not be skipped. If a test cannot be written, stop and say why.
+5. If a decision is missing, ambiguous, contradicts another decision, or cannot be implemented as
+   written (an API level, a library limitation), stop and ask the user, with the options and a
+   recommendation. Never decide silently. Record the answer in section 15 and, when it changes a
+   decision, tell the user which Confluence page and which `CLAUDE.md` rule need the change; update
+   them after approval.
+6. Done means every item of section 6 (Definition of done) holds. Then tick the step in section 14,
+   fill its rows in the traceability table (section 13), commit, push, open the pull request and stop
+   for review. Never merge, and never push to `develop` or `master`.
+7. Documents and code comments are in English, without emoji.
+
+## 3. Open decisions to settle before step 1.1
+
+These are not covered by the Confluence decisions and block the scaffold. Ask the user about each
+in one message, with the recommendation, and record the answers in section 15.
+
+| # | Question | Recommendation and reason |
+|---|---|---|
+| D1 | Repository name and remote | `rubicon-team/rubicon-android-sdk`, local `~/Projects/rubicon-android-sdk`, same branch model as the demo app (`master`, `develop`, `feature/*`, squash merge) |
+| D2 | Maven group, artifact ids, Kotlin packages | Group `com.rubicon.analytics`; artifacts `sdk-core`, `sdk-android`; public package `com.rubicon.analytics` in both modules (the factory reads `Analytics(context, config)` after one import), internals under `com.rubicon.analytics.internal.*`. The group must be a namespace we can verify on Maven Central. |
+| D3 | Java name of the factory | Kotlin `Analytics(context, config)` is a top-level function. With `@file:JvmName("RubiconAnalytics")` and `@JvmName("create")` Java reads `RubiconAnalytics.create(context, config)`. Otherwise Java sees `AnalyticsKt.Analytics(...)`. |
+| D4 | `minSdk` | 21, as Amplitude, Mixpanel, Segment and Snowplow (PostHog: 23). Requires fallbacks the decisions already describe: `getProcessName` (28), `registerDefaultNetworkCallback` (24), `getDefaultDataSubscriptionId`/`createForSubscriptionId` (24). Confirm that the chosen `lifecycle-process` version (D6) supports it; recent AndroidX releases raised their own `minSdk`. |
+| D5 | Kotlin compatibility of the artifacts | Compile with Kotlin 2.2.x but set `apiVersion` and `languageVersion` to 2.0 and `jvmTarget` 1.8, as PostHog and Mixpanel do (Mixpanel's comment: 2.0 "keeps .kotlin_module on the pre-2.1 format"). Apps on Kotlin 1.9.x and newer can then consume the SDK. Set `kotlin.stdlib.default.dependency=false` and declare `kotlin-stdlib` at the matching old version so the SDK never upgrades the app's stdlib. |
+| D6 | Dependency versions shipped to customers | `kotlinx-coroutines-core` 1.9.0 (Mixpanel: "1.10.x transitively forces kotlin-stdlib 2.1.0 on consumers"; 1.9.0 is also where `limitedParallelism` became stable). `lifecycle-process`: the oldest stable version that has `ProcessLifecycleInitializer` and compiles against D5; verify `minSdk`. OkHttp `compileOnly` 4.12.0 (already decided). |
+| D7 | Default SaaS host | The production base URL, for example `https://api.rubicon.example`. Needed for `DEFAULT_HOST`. |
+| D8 | License and publishing | Apache-2.0 (open source SDK). Publishing to Maven Central with `com.vanniktech.maven.publish`, signed, in step 8.6. Only the scaffold's license file is needed now. |
+| D9 | Version numbering | SemVer, first release `0.1.0`; while below `1.0.0` the public API may still change, `apiCheck` records every change regardless. `library.version` comes from one Gradle property, generated into a Kotlin constant. |
+| D10 | In-repository test app | A `:test-app` module, never published, for instrumented tests, the R8 check and an app built without OkHttp (steps 8.1 to 8.3). The demo app stays the manual harness. |
+| D11 | CI | GitHub Actions. Every pull request: `ktlintCheck`, `build`, `test`, `apiCheck`, `lint`, `koverVerify`, the OkHttp 4/5 matrix and the source rules check. Emulator suite: on pull requests that touch `sdk-android` or `test-app`, and nightly on the lowest and highest API level. Coverage gate: 90 percent line coverage in `sdk-core`, 80 percent in `sdk-android` unit tests. Check the private repository's Actions minutes. |
+| D12 | How `RubiconNetworkInterceptor` reaches the instance | Privacy 5c shows `RubiconNetworkInterceptor(hosts = ..., maskPathIds = true)` without the instance, and there is no global accessor (Public API 1). Recommendation: the instance is the first constructor parameter, `RubiconNetworkInterceptor(analytics, hosts, maskPathIds = true)`; a fake or no-op instance makes it pass through. |
+| D13 | `onNewIntent` deep links without an `androidx.activity` dependency | Lifecycle 3 uses `addOnNewIntentListener` (androidx.activity 1.7+), but the SDK's only dependencies are coroutines and lifecycle-process. Recommendation: `androidx.activity` as `compileOnly`, isolated like OkHttp (class presence check, used only when the activity is a `ComponentActivity`), otherwise the documented `setIntent()` advice. |
+
+## 4. Target layout
+
+```
+rubicon-android-sdk/
+  CLAUDE.md                     root rules (step 1.2)
+  README.md                     integration guide (step 8.5)
+  CHANGELOG.md
+  LICENSE
+  settings.gradle.kts, build.gradle.kts, gradle/libs.versions.toml, gradle.properties
+  build-logic/                  included build: shared Kotlin/Android conventions, source rules task
+  sdk-core/                     kotlin("jvm"), java-test-fixtures
+    CLAUDE.md
+    api/sdk-core.api
+    src/main/kotlin/com/rubicon/analytics/                      public API only
+    src/main/kotlin/com/rubicon/analytics/internal/<area>/      implementation
+    src/test/kotlin/...                                          JUnit 5
+    src/test/java/...                                            Java interop tests
+    src/test/resources/golden/                                   golden wire files
+    src/testFixtures/kotlin/...                                  TestPlatform and fakes, shared with sdk-android
+  sdk-android/                  com.android.library
+    CLAUDE.md
+    api/sdk-android.api
+    consumer-rules.pro
+    src/main/kotlin/com/rubicon/analytics/                      factory, @ScreenName
+    src/main/kotlin/com/rubicon/analytics/network/              RubiconNetworkInterceptor, the only okhttp3 code
+    src/main/kotlin/com/rubicon/analytics/internal/android/     platform implementations
+    src/test/kotlin/...                                          Robolectric (JUnit 4)
+    src/androidTest/kotlin/...                                   instrumented
+  test-app/                     not published (D10)
+  docs/
+    implementation-plan.md      this file
+    issue-codes.md              catalogue of WARN/ERROR codes (backend item)
+    remote-config.md            provisional remote configuration contract
+    wire-format.md              points at the golden files and describes the envelope
+  .github/workflows/, .github/pull_request_template.md
+```
+
+Internal areas in `sdk-core`: `platform`, `log`, `util` (UUIDv7, ISO time, HTTP date), `json`,
+`validation`, `config`, `event`, `storage`, `queue` (writer, uploader, triggers), `http`, `retry`,
+`identity`, `session`, `context`, `privacy`, `remote`, `diagnostics`, `pipeline`.
+
+## 5. Test strategy
+
+Every layer below is required; the step or phase that introduces it is in brackets.
+
+| Layer | Where | Tools | Covers |
+|---|---|---|---|
+| Unit | `sdk-core/src/test` | JUnit 5, MockK only where a fake is impossible, `kotlinx-coroutines-test` with `StandardTestDispatcher` and virtual time | Every component in isolation, through `TestPlatform` fakes (clock, elapsed clock, random, dispatchers, network monitor, transport, context provider, process info, file system seam) [2 onward] |
+| Component integration | `sdk-core/src/test/.../integration` | Real files under JUnit `@TempDir`, real `HttpURLConnection` transport against MockWebServer, fake clock | The whole pipeline from `track` to the server, restarts (a new instance over the same directory), crash leftovers [6] |
+| Wire contract | `sdk-core/src/test/resources/golden` | android-json to produce, kotlinx-serialization-json as an independent parser, structural comparison | One golden file per event type and for the batch envelope; every line the SDK writes is valid JSON to an independent parser (Serialization 5) [3, completed in 8.4] |
+| Java interop | `sdk-core/src/test/java`, `sdk-android/src/test/java` | JUnit | Every public method, configuration setter, hook and callback called from Java; compiling is half the test (Public API 7) [3, 7] |
+| Robolectric | `sdk-android/src/test` | Robolectric, JUnit 4 (Robolectric has no JUnit 5 runner) | Factory, process check, lifecycle observers, activity callbacks, deep links, context provider, network callback, Logcat logger [7] |
+| Interceptor | `sdk-android/src/test/.../network` | Real `OkHttpClient` against MockWebServer; the test task runs twice, against OkHttp 4.12 and the latest 5.x | Event shape, masking, host filter, pass-through rules, never throws, never modifies [7] |
+| Instrumented | `sdk-android/src/androidTest` with `test-app` | AndroidX Test, UiAutomator, emulator | Process kill and recovery, real offline transitions, real `ProcessLifecycleOwner`, a second process, release build with R8, an app without OkHttp [8] |
+| Concurrency | `sdk-core/src/test/.../stress` | Real dispatchers, many threads, bounded runs | Thread safety of every public method, per-thread ordering, no lost or duplicated events under load, backpressure counting [6] |
+| Robustness | unit and integration | Seeded random inputs (no new library), fault-injecting file system and transport | Validator and serializer never throw on arbitrary input; storage failures, full disk, truncated files and unreadable stores degrade as decided [2, 4, 6] |
+| Static rules | Gradle `checkSourceRules` task in `build-logic` | Plain source scan | No `java.time`, no `SimpleDateFormat` in the ISO formatter, no `okhttp3` outside `network`, no `android.util.Log` or `println` outside the Logcat logger, no `GlobalScope`, no `synchronized(this)`, no `Dispatchers.Main` in core; log calls never interpolate `properties`, `traits`, `userId`, `deviceId`, `apiKey`, `headers` or `body` (Logging 4a) [1, extended as areas arrive] |
+| API | `apiCheck`, explicit API mode | binary-compatibility-validator, `kotlin { explicitApi() }` | Every public change is visible in the `.api` diff; nothing is public by accident [1] |
+| Lint | `sdk-android` | Android lint, `NewApi` as error, `abortOnError` | API level mistakes on `minSdk` [1] |
+| Coverage | both modules | Kover | Gate on `koverVerify` at the thresholds of D11; exclusions only for generated code, listed in the build file [1] |
+| Manual | demo app with `fake-server` | Checklist in step 9.3 | What a person must see once before a release [9] |
+
+Rules that apply to every test:
+
+- Names are backtick sentences; `sdk-core` groups them with `@Nested inner class`.
+- No `Thread.sleep` and no real waiting in unit tests; time is virtual. Integration and stress tests
+  may wait, with a timeout, on a condition.
+- Every test that touches files uses its own temporary directory. No test depends on another's order.
+- Every drop reason and every issue code has at least one test that produces it and asserts the
+  counter (a test enumerates `DropReason` and `Code` and fails when one has no producing test).
+- Every `debug = true` exception has a test, and the same input with `debug = false` has a test that
+  asserts the log line, the code and that nothing is thrown.
+- Every public entry point has a test that injects a failure below it and asserts the host is not
+  crashed (Non-negotiable 1).
+
+## 6. Definition of done (every step)
+
+- Every test listed for the step exists and passes; `./gradlew check` (which runs `ktlintCheck`,
+  `test`, `apiCheck`, `lint`, `koverVerify` and `checkSourceRules`) is green locally and in CI.
+- A public API change has its `apiDump` diff committed, KDoc on every new public symbol, a Java
+  interop test, and is named at the top of the pull request.
+- No dependency beyond those in step 1.1; a test-only dependency is named in the pull request.
+- Every new WARN or ERROR has a `Code` listed in `docs/issue-codes.md`; every new way to lose an
+  event uses a `DropReason` and is counted.
+- No value, id, key, header, body or query string reaches a log line (Logging 4a).
+- `CLAUDE.md` of the affected module updated if a rule was added, changed or clarified; this file
+  updated: status ticked, traceability rows filled, decisions log extended.
+- No `TODO` without the step that resolves it.
+- The pull request follows the template: problem, change, how it was tested, and the decisions it
+  implements (for example "Queue 4, Disk 1").
+
+## 7. Phase 1: Repository and tooling
+
+### 1.1 Scaffold
+
+- Read: `claude-md-seed.md` sections Modules, Commands, Dependencies, Testing, Code style; section 3
+  answers.
+- Build:
+  - Gradle wrapper (same Gradle as the demo app, 8.14.3), `libs.versions.toml`, `build-logic`
+    conventions for Kotlin JVM and Android library modules (D4, D5, D6).
+  - `sdk-core` (`kotlin("jvm")`, `java-test-fixtures`) and `sdk-android` (Android library, depends on
+    `sdk-core` with `api`, `consumer-rules.pro` with `-dontwarn okhttp3.**`).
+  - `explicitApi()` in both modules; `@RubiconInternal` (`@RequiresOptIn`) in `sdk-core`.
+  - Plugins: ktlint (`ktlintFormat`, `ktlintCheck`), binary-compatibility-validator (`apiDump`,
+    `apiCheck`), Kover, Android lint with `NewApi` as error.
+  - Dependencies exactly as decided: runtime `kotlinx-coroutines-core` (both), `lifecycle-process`
+    (`sdk-android`, `implementation`), `compileOnly` `com.vaadin.external.google:android-json` in
+    `sdk-core` (same API surface as Android's `org.json`; never `org.json:json`), `compileOnly`
+    OkHttp 4.12 in `sdk-android`. Test dependencies as in section 5.
+  - `checkSourceRules` task wired into `check`, starting with the `java.time` and `println` rules.
+  - Generated `BuildInfo.VERSION` constant from the version property (D9).
+  - CI workflow (D11), pull request template, `README.md` stub, `LICENSE`, `CHANGELOG.md`,
+    `.gitignore`.
+- Tests: one trivial test per module so the test tasks, JUnit 5 and Robolectric runners, Kover and CI
+  are proven; a test that `checkSourceRules` fails on a planted `java.time` import (task test using
+  a temporary source set or Gradle TestKit).
+- Done when: `./gradlew build ktlintCheck apiCheck lint koverVerify checkSourceRules` is green locally
+  and in CI; the dependency report (`./gradlew :sdk-android:dependencies --configuration
+  releaseRuntimeClasspath`) shows only stdlib, coroutines and lifecycle-process with their
+  transitive dependencies, at the versions of D5 and D6.
+
+### 1.2 CLAUDE.md files
+
+- Read: `docs/claude-md-seed.md` in full.
+- Build: split it into three files, each rule stated once, the reasoning left to Confluence with a
+  pointer (page and decision number):
+  - root `CLAUDE.md` (target 150 lines at most): modules, commands, non-negotiables, public API rules,
+    dependencies, threading, testing, code style, git and pull requests, how to use this plan;
+  - `sdk-core/CLAUDE.md`: event model, configuration, identity, session state, queue, storage,
+    serialization, HTTP, retry, privacy, logging and diagnostics;
+  - `sdk-android/CLAUDE.md`: factory and process check, lifecycle, screens, deep links, context
+    collection, network monitor, HTTP call capture, permissions, Robolectric conventions.
+  Remove everything about `:app` and `RubiconAnalytics`; the demo app is a separate repository.
+  Replace the seed's commands with the ones of step 1.1. Delete `docs/claude-md-seed.md`.
+- Tests: none; the reviewer checks that no rule of the seed was lost (list any rule deliberately
+  dropped in the pull request).
+- Done when: the three files together cover every rule of the seed, and each is below 200 lines.
+
+## 8. Phase 2: Core foundations (no pipeline yet)
+
+### 2.1 Platform and test fixtures
+
+- Read: Configuration 5 (internal tier), Public API 6, Queue 1, Disk 6.
+- Build: internal `Platform` with `Clock` (wall, epoch ms), `ElapsedClock` (monotonic), `Random`,
+  `Dispatchers` (writer, uploader, watchdog), `NetworkMonitor`, `HttpTransport`, `ContextProvider`,
+  `ProcessInfo`, `LifecycleSource`, `EventStore` and `KeyValueStore` (`@RubiconInternal`, Disk 6),
+  the storage root and a thin `FileSystem` seam used by the file implementations (for fault injection
+  only; production is plain `java.io`). `testFixtures`: `TestPlatform` builder, `FakeClock`,
+  `FakeElapsedClock`, `SeededRandom`, `InMemoryEventStore`, `InMemoryKeyValueStore`,
+  `FakeNetworkMonitor`, `FakeTransport` (scripted results, recorded requests), `FaultyFileSystem`,
+  `FakeLifecycleSource`, `FakeContextProvider`.
+- Tests: fakes behave as documented (a scripted transport returns results in order; the faulty file
+  system fails the configured operation once or always).
+- Done when: `sdk-android` test code can use `TestPlatform` through `testFixtures(project(":sdk-core"))`.
+
+### 2.2 Logging infrastructure
+
+- Read: Logging 1 to 4, `claude-md-seed.md` Code style (logging part).
+- Build: public `LogLevel`, `RubiconLogger`; internal `Log` with `inline` `debug`, `info`,
+  `warn(code)`, `error(code, throwable)`; `Code` enum with every WARN and ERROR code the decisions
+  name (start `docs/issue-codes.md` with the same list, one line of meaning each); once-per-process
+  repeat limit per code with later occurrences at DEBUG; issue counter hook (counters are stored in
+  step 4.1); `CallbackGuard` for the developer's logger and observer (throwing logger falls back to
+  the platform default logger for the process, throwing observer switched off, re-entrant calls on
+  the same thread ignored). Core default logger is a no-op.
+- Tests: level gating does not run the lambda (counting lambda); `OFF` logs nothing; repeat limit per
+  code, second occurrence at DEBUG, counter still incremented; a throwing logger falls back once and
+  logs the fallback line once; re-entrancy from inside the logger is ignored and does not overflow
+  the stack; a throwing observer is disabled after one ERROR; log calls from several threads
+  concurrently.
+- Done when: every later step can log only through these functions.
+
+### 2.3 Identifiers and time
+
+- Read: Event Model 4 and 5, Serialization 4, Retry 3 (`Retry-After` as HTTP date).
+- Build: monotonic UUIDv7 generator (one per instance, seeded from `Platform.random` and
+  `Platform.clock`, strictly increasing within a millisecond and across a clock that moves back); ISO
+  8601 UTC formatter `yyyy-MM-dd'T'HH:mm:ss.SSS'Z'` from epoch ms by calendar arithmetic; HTTP date
+  parser for `Retry-After` (IMF-fixdate; the two obsolete RFC 9110 formats are ignored, which makes
+  the header count as absent: confirm with the user when implementing); SHA-256 hex helper for the
+  key hash (`MessageDigest`).
+- Tests: UUIDv7 version and variant bits, timestamp field equals the clock, 10 000 ids in one
+  millisecond are unique and ordered (RFC 9562 counter method), ordering holds when the clock moves
+  back, parsed by `java.util.UUID`; the ISO formatter (years 0000 to 9999 only) against a table (epoch
+  0, leap day 2024-02-29, 2100-03-01, year boundaries, milliseconds 0 and 999, dates before 1970, the
+  first and last supported instant) and against `java.time` in the test only for 100 000 seeded random instants (tests may use `java.time`);
+  HTTP date examples from RFC 9110 and malformed inputs.
+
+### 2.4 JSON layer
+
+- Read: Serialization 1 and 4, Disk 3.
+- Build: the only code that touches `org.json`: build a compact line from normalized values (write
+  `JSONObject.NULL` for null), read stores with `has()` checks, never trust `opt*` defaults. Document
+  the known behaviours in KDoc: a Kotlin null removes a key, `50.0` becomes `50`, `/` is escaped,
+  large numbers may use exponent form (`1.0E21`), NaN and Infinity must never reach `org.json`.
+  Events are never parsed back into objects; reading exists only for the three store files and for
+  the corruption and age check of stored lines (Disk 3).
+- Tests (on android-json): `{"coupon":null}` is written as such; each known behaviour pinned by a
+  test so a change of runtime would be noticed; round trip of every normalized type; output parsed by kotlinx-serialization-json; non-ASCII
+  and escaped characters; a 32 KB line; reading a store file with missing, extra and wrongly typed keys.
+
+### 2.5 Property validation and normalization
+
+- Read: Public API 3, Serialization 2 and 3, Event Model 3, Context (super properties rule).
+- Build: one-pass validator and normalizer producing an immutable deep copy: the conversion table,
+  `java.time` rejected with the hint, NaN and Infinity dropped, invalid keys dropped, 1..255 names and
+  keys never trimmed, strings truncated at 1024 on a code point boundary without a marker, 256
+  properties with super properties dropped first, depth 3 (which also stops self-referencing maps),
+  unpaired surrogates to U+FFFD, a bad element of a collection drops only that element, `java.time`
+  detected by class name without referencing the classes, the exact hint message of Serialization 2,
+  truncation logged once per key and never thrown. Result carries the list of problems (key and type only) so the caller logs or throws according to `debug`.
+- Tests: one test per row of the conversion table and per limit, exactly at, below and above each
+  bound; `debug = true` throws the documented exception, `debug = false` drops the key and logs the
+  documented code; the caller's map mutated after the call does not change the event; nested
+  collections are copied deeply; seeded random maps (nested, mixed types, hostile strings) never make
+  the validator throw in release mode and always produce a JSON-serializable result.
+
+## 9. Phases 3 to 6: Core
+
+### 3.1 Configuration
+
+- Read: Configuration 1 to 6, Queue 3 and 7, Session (timeout bounds), Lifecycle (`Autocapture`
+  values), Context (`ContextField` values), Privacy 2 and 4, Logging (configuration table).
+- Build: `AnalyticsConfig(apiKey)` with `host`, `debug`, `beforeSend` and the groups `flush`,
+  `session`, `autocapture`, `context`, `privacy`, `logging`, `network`, `remote`; enums `Autocapture`,
+  `ContextField`, `Consent`; freezing property delegate; validator (bounds, clamping, debug
+  exceptions, host normalization with optional path, reserved headers); immutable internal
+  `ConfigSnapshot`; `DEFAULT_HOST` (D7). KDoc with bounds on every numeric setting.
+- Tests: defaults of every setting; every bound at, below and above in both modes; blank key and
+  invalid host in both modes (release returns the no-op signal, not an exception); host with and
+  without trailing slash and path; `http://` warns in release; reserved header override throws in
+  debug and is ignored with WARN in release; after freezing, every setter throws in debug and is
+  ignored with one WARN in release; the snapshot does not change when the config object is changed
+  afterwards; Java test builds a full configuration through getters and setters.
+
+### 3.2 Event model and public types
+
+- Read: Event Model (all), Public API 4 and 5, Logging 4c, Lifecycle (`source`).
+- Build: `sealed class Event` with `TrackEvent`, `ScreenEvent`, `IdentifyEvent`; `EventContext`;
+  `EventSource`; internal constructors; limited `copy` with `@JvmOverloads`; `toString` with type,
+  name and message id only; `BeforeSend`; `EventObserver`, `EventUpdate` (`Queued`, `Sent`,
+  `Dropped`); `DropReason` with the ten reasons. Wire mapping of each type (snake_case keys, epoch ms
+  times) through the JSON layer.
+- Tests: `copy` changes only name and properties or traits and re-validation happens later (step
+  6.3); hooks cannot reach the read-only fields; `toString` never contains properties or ids other
+  than `message_id`; first golden files: one track, one screen, one identify line, compared
+  structurally and parsed by the independent parser.
+
+### 3.3 The `Analytics` interface
+
+- Read: Public API 1, 2, 7, 8 and 9.
+- Build: `Analytics` with the full vocabulary and `deviceId`, KDoc with the threading contract;
+  internal `NoOpAnalytics`. First `apiDump`.
+- Tests: `NoOpAnalytics` accepts every call from any thread and never throws; Java test calls every
+  method.
+- Done when: the `.api` files contain exactly the public types decided so far and nothing else.
+
+### 4.1 Key-value stores
+
+- Read: Identity 1 and 5, Disk 2 and 7, Retry 5, Logging 5 (counters), Privacy 2 and 3.
+- Build: atomic JSON file store (`.tmp`, fsync, rename, `"v"`, coalesced writes on the writer, a
+  leftover store `.tmp` deleted at startup, memory is the source of truth),
+  missing versus unreadable (corrupt, Direct Boot, newer `v`): unreadable means in-memory values for
+  the process and the file is never overwritten; `PersonStore` and `DeviceStore` with their decided
+  keys, in the shapes of Disk 7: `person.json` `{"v":1,"user_id",
+  "super_properties":{},"session":{"id","started_at","last_activity"}}`, `device.json` `{"v":1,
+  "device_id","consent","last_version","last_build","retry":{...},"diagnostics":{...}}`, with the
+  retry object of Retry 5 and the consent states "no decision", `granted`, `denied` (Privacy 2);
+  `remote-config.json` belongs to `DeviceStore`. Missing `device.json`: generate and write; missing
+  `person.json`: anonymous and write.
+- Tests: exact key set of each store (the test named in Identity); missing file creates; corrupt file,
+  newer `v` and unreadable file keep in-memory values and leave the file byte-identical; a crash
+  between write and rename (simulated with the faulty file system) leaves the old file valid; many
+  updates in a row produce one write; file permissions are app-private.
+
+### 4.2 Event store
+
+- Read: Disk 1 to 6, Queue 4 and 5, Serialization 3.
+- Build: segmented append log under `events/v1/{keyHash}/`: open segment `{index}.tmp` with a
+  fixed-width index computed from the directory, one `write()` per line, close at 100 events, 512 KB
+  or flush (fsync, rename), closed segments immutable, one segment is one batch; deletion after
+  acknowledgement; startup: delete other key directories (`api_key_changed`), recover a leftover
+  `.tmp` (keep whole lines, drop a half line as `corrupt`), delete unknown files with WARN, expire
+  events older than 3 days, enforce 1000 events by trimming the oldest to 900 (`queue_full`); corrupt
+  lines (half line, invalid JSON, not an object, or missing `type`, `message_id` or numeric
+  `timestamp`) skipped with ERROR naming segment, line number and `message_id` only; expired lines of
+  a partly expired segment skipped when building the body; pending count from counting lines at
+  startup, then kept in memory; a write error counts `storage_error`, logs WARN and the next event
+  goes to a new segment (Direct Boot is not supported and ends here, Disk 2a); an unreadable segment
+  retried and deleted after 3 consecutive failures (`UNREADABLE_SEGMENT`); streaming reads only.
+- Tests: every rule above; a segment never exceeds 100 events or 512 KB; index ordering survives
+  restart and gaps; the batch body produced from a segment is byte-identical to the lines written;
+  expiry at exactly 3 days; trimming counts dropped events per reason; a write failure counts
+  `storage_error` and the SDK keeps running; 10 000 events written and read back in order; a
+  seeded-random truncation of a `.tmp` at every byte offset of its last line recovers correctly.
+
+### 5.1 HTTP transport
+
+- Read: HTTP 1 to 6, Configuration 5, Retry 1.
+- Build: `HttpURLConnectionTransport` behind `HttpTransport`: POST batch and GET config; gzip in
+  memory with `Content-Length` via `setFixedLengthStreamingMode`; `Authorization: Bearer`,
+  `Content-Type`, `Content-Encoding`, User-Agent `rubicon-android/{version} (Android {os}; API
+  {level})` (values from `ProcessInfo`), custom `network.headers` except reserved ones; timeouts 15 s
+  connect, 20 s read, 45 s watchdog on its own dispatcher calling `disconnect()`; `useCaches = false`,
+  no redirects; read at most 4 KB of an error body, always drain and close; `Retry-After` in seconds or
+  HTTP date; `HttpResult` (`Success(code)`, `HttpError(code, body, retryAfterMs)`,
+  `NetworkFailure(kind, cause)`); compression failure sends uncompressed with WARN; `Content-Type:
+  application/json; charset=utf-8`; a 3xx logs the ERROR that names the redirect target; the
+  blocked-host check after `CONNECT` or `DNS` failures only (`0.0.0.0`, `127.x`, `::`, `::1`; skipped
+  for `localhost` and IP hosts; WARN once); a server request id header, if any, added to the DEBUG
+  line; never throws, unexpected runtime exceptions become `UNEXPECTED` with an ERROR.
+- Tests (MockWebServer): request line, headers and gzip body decoded and compared; reserved headers
+  cannot be overridden; `Content-Length` present and no chunking; 2xx, 3xx not followed, each 4xx and
+  5xx group, 429 and 503 with seconds, HTTP date, invalid and missing `Retry-After`; slow headers
+  trigger read timeout (`TIMEOUT`), a server that never finishes the body trips the 45 s watchdog
+  (virtual time is impossible here: use shortened internal timeouts in tests); connection refused
+  (`CONNECT`), unknown host (`DNS`), untrusted certificate with MockWebServer HTTPS and a held
+  certificate (`TLS`), a resolver returning loopback (`BLOCKED`), an unexpected exception
+  (`UNEXPECTED`); a 1 MB error body reads 4 KB; the transport never throws for any of these.
+
+### 5.2 Retry policy and backoff
+
+- Read: Retry 1 to 6, Queue 2.
+- Build: pure classification function over `HttpResult` into groups A to E; backoff table with
+  jitter from `Platform.random`; `Retry-After` handling (cap 1 h, values of 0 or less count as 1 s,
+  forward-only jitter 1.0 to 1.1, kept across restarts); pause of 1 h plus or minus 20 percent for
+  group E, then one try, with ERROR once; no network means no attempt and no step advance; waits in
+  a process measured with the elapsed clock; poison-batch rule (after 5 failures try the next segment,
+  drop after 10 as `retry_exhausted` while others succeed); retry state persisted in `DeviceStore` and
+  restored, clamped when the clock moved back.
+- Tests: a table test with one row per status code and failure kind; backoff steps and jitter bounds
+  with a seeded random; reset on success; `Retry-After` never shortened and never extended past the
+  cap; network regained ends only network waits; poison-batch sequence end to end with a scripted
+  transport; restored state after restart; clock moved back by a day.
+
+### 5.3 Remote configuration
+
+- Read: Configuration 1 and 3, Lifecycle (NETWORK_REQUESTS), Logging 5 (diagnostics rate).
+- Build: `docs/remote-config.md` with the provisional JSON contract (marked pending backend);
+  background `GET {host}/v1/config` with ETag and `If-None-Match`; validation with the same validator
+  (restrict only); saved to `remote-config.json`; applied at the next launch; runtime flags for
+  `enabled = false` and `NETWORK_REQUESTS` off applied at once; `sample_rate` and
+  `diagnostics_sample_rate` derived deterministically from `device_id`; `If-None-Match` with the stored
+  ETag and `useCaches = false`.
+- Tests: 200, 304, 404 (no remote values), 5xx, malformed JSON, unknown keys, values that try to
+  widen what code allows (enable an autocapture that code disabled, lower `flush_at` or
+  `flush_interval_ms` below the code value: remote may only raise them within the bounds, Queue 3,
+  raise a sample rate) are ignored with WARN; a request is allowed while consent is pending;
+  restart applies saved values; the kill switch stops collection and upload in the running process;
+  sampling is stable for a device id and splits a population close to the rate.
+
+### 6.1 Identity and super properties
+
+- Read: Identity (all), Public API 9, Context (super properties).
+- Build: in-memory identity with lock or volatile snapshot, persisted through the writer; `identify`
+  rules (anonymous, same id with and without traits, different id clears `PersonStore`), `reset`,
+  `register`, `unregister`, `deviceId`; missing versus unreadable device id; while opted out
+  `identify` updates local state without an event; `reset` clears all super properties; a super
+  property of `null` is stored and sent as JSON null; INFO without ids on a user switch.
+- Tests: every row of the identify rules; blank and 256-character ids in both modes; never trimmed;
+  `identify` then `track` on the same thread carries the new id; traits never stored; `reset` never
+  renews `device_id`; unreadable device file gives a temporary id and leaves the file untouched.
+
+### 6.2 Session
+
+- Read: Session (all).
+- Build: session manager driven by `LifecycleSource` (foreground and background), `ElapsedClock` for
+  background time, wall clock for persisted last activity; `Session Started` and backdated `Session
+  Ended` with `duration_ms`; 12 h maximum; background rules; process start evaluation; interaction
+  with `reset` and a changed user.
+- Tests: every sentence of the Session page as a scenario on virtual time: `Session Started`
+  immediately before the starting event with its timestamp equal to `started_at` and no properties;
+  `Session Ended` on each of its five triggers, carrying the ended session; continue within the
+  timeout, end after it, background events never extend, background process start has no session,
+  maximum duration, clock moved back, restart within and after the timeout, last activity written at
+  most every 30 s, reset and user switch order of events.
+
+### 6.3 Writer and pipeline
+
+- Read: Queue 1, 2 and 7, Public API 4 and 9, Event Model 3, Disk 4, Logging 4c.
+- Build: SDK scope (`SupervisorJob`, `CoroutineExceptionHandler` that logs and never rethrows in
+  release); the writer's first task is loading `DeviceStore` (Privacy 2); write channel of 1000 with
+  `trySend` (`backpressure`), `WriteMessage` as in Queue 1; messages for events, `Flush`, identity
+  and super property persistence, consent changes, `clearLocalData`; internal steps in order: context, super properties, session,
+  `beforeSend` chain (fail-closed, `before_send`), second validation, serialization with the 32 KB
+  check (`oversize`), append; time-dependent context (network, screen, locale, timezone) captured on
+  the calling thread, the rest added on the worker (Context 2); `EventUpdate.Queued` after the append;
+  internal `FlushTrigger` with `CountTrigger` (pending on disk including leftovers), `IntervalTrigger`
+  (from the first pending event, started at process start when leftovers exist, cancelled by any
+  flush), `BackgroundTrigger`, `NetworkTrigger` (only while events are pending),
+  `ImmediateEventTrigger` (exact, case-sensitive final name after hooks, flush after persisting,
+  DEBUG line). No startup flush and no periodic timer.
+- Tests: order of calls from one thread is kept; a hook that drops, throws, renames or adds
+  properties, and one that returns an invalid property; the observer sees `Queued` for exactly the
+  persisted events; channel full counts `backpressure` without blocking the caller; every trigger
+  fires once and only when its condition holds; `flush()` includes all earlier events.
+
+### 6.4 Uploader
+
+- Read: Queue 2 and 4, Retry (all), HTTP 2, Logging 4c.
+- Build: conflated upload signal; gates (offline, backoff, opted out, consent pending, kill switch);
+  sequential batches oldest first; envelope `{"sent_at":..,"batch":[...]}` streamed with `sent_at`
+  rewritten per attempt; delete after 2xx; `Sent` and `Dropped` updates; stop at the first failure;
+  one request in flight.
+- Tests: each gate blocks and its release resumes; `sent_at` differs between attempts of the same
+  batch; a batch is deleted only after 2xx; no two requests overlap under a burst of signals;
+  `Sent` lists exactly the batch's message ids.
+
+### 6.5 Privacy
+
+- Read: Privacy (all), Identity 5.
+- Build: `optOut`, `optIn`, `isOptedOut` (true while opted out or pending; the early read of
+  `device.json` only before the writer has loaded it), the open session ended without an event on
+  `optOut`, no opt-in event, `defaultConsent`, `persistConsent`, stored choice wins, `PENDING` write-but-never-send
+  and its resolution (queue limits still apply, pending survives a restart without a stored
+  decision), `clearLocalData` through the write channel with its keep and delete lists.
+- Tests: every rule; startup events of an opted-out user never reach disk; from `PENDING`, `optOut`
+  deletes waiting events without counting and `optIn` uploads them; `clearLocalData` keeps consent,
+  version and build and remote config, renews `device_id`, counts nothing; opted out produces no
+  automatic events, no session events and no `SDK Diagnostics`.
+
+### 6.6 SDK Diagnostics
+
+- Read: Logging 5, Queue 5.
+- Build: the `SDK Diagnostics` event right before a flush when a counter is non-zero and one hour has
+  passed (future last time counts as now); counters reset when it is written; its own drop not
+  counted; sampling by `device_id`; `logging.sendDiagnostics`; never while opted out, pending or
+  killed.
+- Tests: silent device sends nothing; one event per hour at most across restarts; exact property
+  shape against a golden file; counters reset only after the write; opted out keeps counting and
+  reports after `optIn`.
+
+### 6.7 `DefaultAnalytics` and the core factory
+
+- Read: Public API 1 and 9, Configuration 3 and 4.
+- Build: `DefaultAnalytics` wiring every component; internal core factory `(config, platform)`; one
+  instance per process guard (debug throws, release returns the existing instance); internal
+  `flushBlocking(timeout)`.
+- Tests: integration suite (section 5, component integration): track to server with real files and
+  MockWebServer; offline then online; 503 then 200; restart with pending events; crash leftovers;
+  two instances; stress suite: 16 threads times 5000 mixed calls, then `flushBlocking`, the server
+  received every accepted event exactly once and per-thread order holds, backpressure counted exactly.
+- Done when: the whole core runs on the JVM end to end and the `.api` diff of `sdk-core` is final
+  for the first release.
+
+## 10. Phase 7: Android
+
+### 7.1 Factory and Android platform
+
+- Read: Public API 2, Configuration 3, Disk 2 (2d warning), Logging 1.
+- Build: `Analytics(context, config)` (D3), application context only; main process check
+  (`applicationInfo.processName` versus `Application.getProcessName()` or `runningAppProcesses` below
+  API 28, matched on `Process.myPid()`; `applicationInfo.processName` falls back to `packageName`;
+  never `/proc` or `ActivityThread`; unknown name assumed main with WARN; other processes get a no-op
+  and one INFO line);
+  `AndroidPlatform` (storage under `noBackupFilesDir/rubicon/`, `SystemClock.elapsedRealtime`,
+  process info, Logcat logger with tag `Rubicon`); nothing read on the main thread.
+- Tests (Robolectric): main and non-main process, API levels on both sides of 28; files never in
+  `SharedPreferences` or the backed-up directory; StrictMode disk-read detection around the factory
+  call; a developer logger is never replaced; Java creation through the D3 name.
+
+### 7.2 Network monitor
+
+- Read: Retry 6, Context (permission rule).
+- Build: one `registerDefaultNetworkCallback` per process, never unregistered (a request-based
+  fallback below API 24 if D4 keeps `minSdk` 21), registered in `try/catch(Throwable)`; connected
+  means `NET_CAPABILITY_INTERNET`, never `VALIDATED`; without `ACCESS_NETWORK_STATE` always connected,
+  no callback, INFO once; on registration failure query before each flush, no automatic flush on
+  network return, WARN once. The same monitor feeds context (network type, carrier) and retry.
+- Tests: Robolectric shadows for connect, lose, capability change, registration throwing, permission
+  removed.
+
+### 7.3 Context provider
+
+- Read: Context (all).
+- Build: `AndroidContextProvider` with the decided fields, lazy on the worker, cached and refreshed by
+  signals, carrier of the default data subscription with fallback, disabled fields never read,
+  unknown values omitted.
+- Tests: each field present and its source; each `ContextField` disabled is neither read nor sent;
+  dual SIM reports the data SIM; configuration change refreshes screen and locale; timezone read per
+  event; missing permission omits `network.type`.
+
+### 7.4 Lifecycle, install and update
+
+- Read: Lifecycle 1 to 4 and 6, Session, Queue 2 (ON_STOP).
+- Build: `ProcessLifecycleOwner` observer added on the main thread, `AppInitializer` call;
+  `Application Opened` (`from_background`), `Application Backgrounded`; install and update rules with
+  `DeviceStore` and their properties (`version`, `build`, `installed_at`; `previous_version`,
+  `previous_build` when known, `updated_at`, `is_downgrade` only when true), timestamped at the
+  check; ON_STOP flush and fsync; each type gated by `Autocapture` and remote switch-off.
+- Tests: first launch, update, downgrade, no record with differing times, reinstall; foreground and
+  background sequence produces the decided events with `source = auto`; the Startup provider removed
+  from the manifest still works.
+
+### 7.5 Screens and deep links
+
+- Read: Lifecycle 3 and 6, Privacy 5.
+- Build: public `@ScreenName`; activity callbacks for automatic screen views (repeated resume of the
+  same activity skipped, name rules, `name_source`); `Deep Link Opened` with scheme, host, path,
+  the five `utm_*` parameters (`utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`)
+  and referrer package or host only, never the fragment; `addOnNewIntentListener` for `singleTop`
+  as settled in D13; weak-reference dedupe. `@ScreenName` kept by `consumer-rules.pro`.
+- Tests: annotation and class-name rules; repeated resume; rotation; `singleTop` new intent; a
+  non-`utm` query parameter never appears; `DEEP_LINKS` off by default.
+
+### 7.6 HTTP call capture
+
+- Read: Configuration 5, Lifecycle (`Network Request`), Privacy 5, `claude-md-seed.md` "HTTP call
+  capture".
+- Build: `RubiconNetworkInterceptor` with the constructor settled in D12, in the `network` package;
+  pass-through when opted out, `NETWORK_REQUESTS` off (checked per request) or the instance is not
+  the SDK's own; never modifies, never throws, never captures the SDK host, headers, bodies, query or
+  fragment; masks ids in paths. Test source set runs against OkHttp 4.12 and the latest 5.x.
+- Tests: event shape per field; masking rules (digits, UUID, hex longer than 16); unconfigured host
+  ignored; failure produces `error` as a short class name; response body still readable by the app;
+  a throwing SDK path still returns the response; the interceptor identity check with a fake
+  `Analytics`; both OkHttp versions green.
+- Done when: no class outside `com.rubicon.analytics.network` references `okhttp3` (source rule).
+
+## 11. Phase 8: Hardening and release readiness
+
+### 8.1 Test app and instrumented suite
+
+- Build: `:test-app` (D10) with a main process, a `:remote` process service, two activities, a deep
+  link, an OkHttp client with the interceptor.
+- Tests (emulator, on the lowest supported API level and the latest; Serialization 5 asks for the
+  `org.json` behaviour tests of step 2.4 to run here too): kill the process while writing 500
+  events, restart, every accepted event arrives, and a repeat only ever carries the same
+  `message_id` (at-least-once, deduplicated by the backend); real offline and online with `svc wifi` and `svc data`; real
+  foreground and background with UiAutomator home press; the `:remote` process creates no files and
+  sends nothing; install and update event across an `adb install -r` of a higher version code.
+
+### 8.2 R8 and consumer rules
+
+- Tests: `test-app` minified release variant runs the smoke subset of 8.1; no missing class warnings
+  in the R8 output.
+
+### 8.3 App without OkHttp
+
+- Tests: a `test-app` flavor with no OkHttp on the classpath starts, tracks and uploads; no
+  `NoClassDefFoundError`.
+
+### 8.4 Wire contract complete
+
+- Build: golden files for every automatic event (`Application Installed`, `Updated`, `Opened`,
+  `Backgrounded`, `Session Started`, `Session Ended`, automatic screen, `Deep Link Opened`,
+  `Network Request`, `SDK Diagnostics`) and the envelope; `docs/wire-format.md`.
+- Tests: the whole golden set compared structurally; every file parsed by the independent parser.
+
+### 8.5 Documentation
+
+- Build: KDoc complete on every public symbol (a Dokka build with `failOnWarning`); `README.md` as the
+  integration guide: dependency, creation in `Application`, `BuildConfig.DEBUG`, on-prem `host`,
+  Java example, consent and privacy checklist (disable `NETWORK_CARRIER`, `LOCALE`, `TIMEZONE` for
+  child-directed apps), interceptor setup, `eventObserver` for QA, R8 notes; `docs/issue-codes.md`
+  complete.
+
+### 8.6 Publishing (after D8 is answered)
+
+- Build: Maven Central publishing for both artifacts with sources, KDoc jar, signing, POM metadata;
+  a release workflow on tags; `CHANGELOG.md` entry.
+- Tests: `publishToMavenLocal` and a throwaway project consuming both artifacts with Kotlin 1.9 and
+  with Java only, both building and running a unit test.
+
+## 12. Phase 9: Demo app and backend (in the demo repository)
+
+### 9.1 Fake backend
+
+- Remove the `invalid=` parameter; add `GET /v1/config` serving a JSON file per key with ETag and 304;
+  add a control for redirects, TLS-less errors and slow responses where manual checks need them.
+
+### 9.2 Demo app on the SDK
+
+- Composite build (`includeBuild`) against the SDK checkout; replace `RubiconAnalytics` and
+  `LoggingAnalytics` with `Analytics`; Diagnostics screen fed by `eventObserver`; configuration as in
+  the demo app's `CLAUDE.md`.
+
+### 9.3 Manual scenario checklist
+
+Run once before every release and record the result in the release pull request:
+
+1. Fresh install: `Application Installed`, `Application Opened`, `Session Started`, first screen.
+2. Background and return within 5 minutes: same session; after the timeout: `Session Ended`
+   backdated, new session.
+3. Airplane mode, 50 events, back online: all arrive once.
+4. `control?status=503&retry_after=30`: waits 30 s, then sends; `status=401`: pause, ERROR once.
+5. Kill from recent apps with pending events, reopen: they arrive.
+6. `optOut`, events, `optIn`: nothing from the opted-out period; `PENDING` then `optIn`: waiting
+   events arrive.
+7. `identify`, `reset`, another `identify`: events and sessions as decided.
+8. Deep link with `utm_source` and a private parameter: only `utm_*` arrives.
+9. Interceptor on a configured host with an id in the path: masked; remote switch-off stops capture
+   at once.
+10. Remote `enabled = false`: collection and upload stop in the running process.
+11. Logcat at default level on a healthy run: silent.
+
+## 13. Traceability
+
+Every decision is implemented in a step and verified by at least one named test. When a step is done,
+fill the Test column of its rows with the test class and test names. A row without a test blocks the
+release.
+
+| Decision | In short | Steps | Tests |
+|---|---|---|---|
+| Public API 1 | Developer holds one instance per process, no singleton | 6.7, 7.1 |  |
+| Public API 2 | `Analytics` interface, internal implementation, factory | 3.3, 6.7, 7.1 |  |
+| Public API 3 | `Map<String, Any?>` validated at the boundary | 2.5 |  |
+| Public API 4 | `beforeSend` list fixed at creation, fail-closed | 3.2, 6.3 |  |
+| Public API 5 | Public methods return `Unit` | 3.3 |  |
+| Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1 |  |
+| Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 |  |
+| Public API 8 | Vocabulary and read-only `deviceId` | 3.3, 6.1, 6.5 |  |
+| Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3, 6.7 |  |
+| Event Model 1 | Top level, `properties`/`traits`, `context` ownership | 3.2, 6.3 |  |
+| Event Model 2 | Sealed `TrackEvent`, `ScreenEvent`, `IdentifyEvent`; `type` on the wire | 3.2, 8.4 |  |
+| Event Model 3 | Immutable normalized maps, validated twice | 2.5, 6.3 |  |
+| Event Model 4 | `message_id` UUIDv7, never regenerated | 2.3, 6.3, 6.4 |  |
+| Event Model 5 | Epoch ms, ISO dates in properties, `sent_at` per attempt | 2.3, 6.4 |  |
+| Event Model 6 | Public classes, internal constructors, limited `copy` | 3.2 |  |
+| Configuration 1 | Code plus restrict-only remote, allowlist, next launch, two immediate flags | 5.3 |  |
+| Configuration 2 | One class, small groups, tuning internal | 3.1 |  |
+| Configuration 3 | Only `apiKey` required, factory validation, one instance, main process | 3.1, 6.7, 7.1 |  |
+| Configuration 4 | Snapshot and freeze | 3.1 |  |
+| Configuration 5 | Public hatches, internal `Platform`, `HttpURLConnection`, OkHttp `compileOnly` | 2.1, 5.1, 7.6 |  |
+| Configuration 6 | No platform types in configuration | 3.1 |  |
+| Identity 1 | `deviceId` and `userId` in files outside backup | 4.1, 6.1, 7.1 |  |
+| Identity 2 | Implicit merge: both ids on every event | 3.2, 6.1 |  |
+| Identity 3 | One `identify`, set-only traits never stored | 6.1 |  |
+| Identity 4 | Different id means person reset, then identify | 6.1, 6.2 |  |
+| Identity 5 | `reset` clears person data only, no event | 4.1, 6.1 |  |
+| Identity 6 | No alias | 3.3 |  |
+| Context 1 | Internal `ContextProvider`, `ContextStep`, nothing on the main thread | 2.1, 6.3, 7.3 |  |
+| Context 2 | Cached and signal-refreshed, captured at call time, carrier of the data SIM | 6.3, 7.2, 7.3 |  |
+| Context 3 | Twenty fields, unknown omitted (list to be revisited) | 7.3, 8.4 |  |
+| Context 4 | Everything in `context`, read-only for hooks | 3.2 |  |
+| Context 5 | `register`/`unregister`, validated at registration | 2.5, 6.1 |  |
+| Context 6 | `context.disabledFields`, never read when disabled | 3.1, 7.3 |  |
+| Session 1 | SDK computes sessions, on every event | 6.2 |  |
+| Session 2 | UUIDv7 id plus `started_at` | 6.2 |  |
+| Session 3 | Foreground keeps alive, background never extends | 6.2, 7.4 |  |
+| Session 4 | 5 min timeout (10 s to 2 h), 12 h maximum, no timers | 3.1, 6.2 |  |
+| Session 5 | `Session Started`/`Ended`, backdated with `duration_ms` | 6.2, 8.4 |  |
+| Session 6 | Persisted in `PersonStore`, resumed after restart | 4.1, 6.2 |  |
+| Lifecycle 1 | Event inventory and properties | 7.4, 7.5, 7.6, 8.4 |  |
+| Lifecycle 2 | `ProcessLifecycleOwner`, `AppInitializer` | 7.4 |  |
+| Lifecycle 3 | Activity screens, `@ScreenName`, `name_source` | 7.5 |  |
+| Lifecycle 4 | Install and update detection | 7.4 |  |
+| Lifecycle 5 | Plain names, `source` `app`/`auto` | 3.2, 7.4 |  |
+| Lifecycle 6 | `Autocapture` set and defaults, `NETWORK_REQUESTS` off at once | 3.1, 5.3, 7.4, 7.6 |  |
+| Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3, 6.4 |  |
+| Queue 2 | Flush triggers and suppression, no WorkManager | 6.3, 6.4, 7.4 |  |
+| Queue 3 | 30 events or 60 s, bounds, remote only raises | 3.1, 5.3 |  |
+| Queue 4 | 100 events / 512 KB batches, oldest first, sequential | 4.2, 6.4 |  |
+| Queue 5 | 1000 events, 3 days, drop counters | 4.2, 6.6 |  |
+| Queue 6 | No public flush policy, no pause or resume | 3.3 |  |
+| Queue 7 | `flush.immediateEvents` | 3.1, 6.3 |  |
+| Disk 1 | Segmented append log, one segment is one batch | 4.2 |  |
+| Disk 2a | Everything under `noBackupFilesDir/rubicon/` | 4.1, 4.2, 7.1 |  |
+| Disk 2b | Fixed-width index from the directory | 4.2 |  |
+| Disk 2c | One directory per key, others deleted (`api_key_changed`) | 4.2 |  |
+| Disk 2d | Main process only | 7.1, 8.1 |  |
+| Disk 3 | JSON Lines equal to the wire event, `v1` directory | 4.2, 2.4 |  |
+| Disk 4 | One `write()` per event, fsync points, `.tmp` recovery | 4.2, 7.4, 8.1 |  |
+| Disk 5 | Corrupt lines skipped, unreadable segments retried then deleted | 4.2 |  |
+| Disk 6 | No encryption, storage not replaceable | 2.1 |  |
+| Disk 7 | Atomic person and device stores with `v` | 4.1 |  |
+| Serialization 1 | `org.json` `compileOnly`, one conversion layer | 1.1, 2.4 |  |
+| Serialization 2 | Conversion table, no `java.time` | 2.5, 1.1 |  |
+| Serialization 3 | Size limits | 2.5, 6.3 |  |
+| Serialization 4 | snake_case, epoch ms, own ISO formatter | 2.3, 3.2 |  |
+| Serialization 5 | Streamed body, golden files, independent parser | 3.2, 6.4, 8.4 |  |
+| HTTP 1 | `HttpURLConnection` behind `HttpTransport` | 5.1 |  |
+| HTTP 2 | Always gzip, `Content-Length` | 5.1 |  |
+| HTTP 3 | 15 s / 20 s / 45 s watchdog | 5.1 |  |
+| HTTP 4 | Sealed `HttpResult`, never throws | 5.1 |  |
+| HTTP 5 | Bearer key, User-Agent, no redirects | 5.1 |  |
+| HTTP 6 | No transport extras, blocked-host check | 5.1 |  |
+| Retry 1 | Five groups, only a bad batch deleted | 5.2 |  |
+| Retry 2 | Backoff table with jitter, 1 h for configuration problems | 5.2 |  |
+| Retry 3 | `Retry-After` cap and floor, poison-batch rule | 5.2, 6.4 |  |
+| Retry 4 | 413 as configuration problem, server answers 200 | 5.2 |  |
+| Retry 5 | Pipeline wait and per-segment attempts persisted, clock guard | 4.1, 5.2 |  |
+| Retry 6 | One default-network callback, `INTERNET` without `VALIDATED` | 7.2 |  |
+| Privacy 1 | `optOut` stops new events, queue still sends | 6.5, 7.6 |  |
+| Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3, 6.5 |  |
+| Privacy 3 | `clearLocalData`, read-only `deviceId` | 6.5 |  |
+| Privacy 4 | `Consent` `GRANTED`/`PENDING` | 3.1, 6.5 |  |
+| Privacy 5a | No field presets, checklist in the guide | 8.5 |  |
+| Privacy 5b | Deep links collect `utm_*` only | 7.5 |  |
+| Privacy 5c | Network capture without headers or bodies, masked ids | 7.6 |  |
+| Privacy 6 | No IP setting in the SDK | 3.1 |  |
+| Logging 1 | `RubiconLogger`, instance-owned, Logcat default | 2.2, 7.1 |  |
+| Logging 2 | Levels, default `WARN`, repeat limit, no runtime setter | 2.2 |  |
+| Logging 3 | Inline gating | 2.2 |  |
+| Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3, 6.4 |  |
+| Logging 5 | `SDK Diagnostics` | 6.6, 5.3 |  |
+
+## 14. Status
+
+- [ ] 0 Open decisions D1 to D13 answered and recorded in section 15
+- [ ] 1.1 Scaffold
+- [ ] 1.2 CLAUDE.md files
+- [ ] 2.1 Platform and test fixtures
+- [ ] 2.2 Logging infrastructure
+- [ ] 2.3 Identifiers and time
+- [ ] 2.4 JSON layer
+- [ ] 2.5 Property validation and normalization
+- [ ] 3.1 Configuration
+- [ ] 3.2 Event model and public types
+- [ ] 3.3 The `Analytics` interface
+- [ ] 4.1 Key-value stores
+- [ ] 4.2 Event store
+- [ ] 5.1 HTTP transport
+- [ ] 5.2 Retry policy and backoff
+- [ ] 5.3 Remote configuration
+- [ ] 6.1 Identity and super properties
+- [ ] 6.2 Session
+- [ ] 6.3 Writer and pipeline
+- [ ] 6.4 Uploader
+- [ ] 6.5 Privacy
+- [ ] 6.6 SDK Diagnostics
+- [ ] 6.7 `DefaultAnalytics` and the core factory
+- [ ] 7.1 Factory and Android platform
+- [ ] 7.2 Network monitor
+- [ ] 7.3 Context provider
+- [ ] 7.4 Lifecycle, install and update
+- [ ] 7.5 Screens and deep links
+- [ ] 7.6 HTTP call capture
+- [ ] 8.1 Test app and instrumented suite
+- [ ] 8.2 R8 and consumer rules
+- [ ] 8.3 App without OkHttp
+- [ ] 8.4 Wire contract complete
+- [ ] 8.5 Documentation
+- [ ] 8.6 Publishing
+- [ ] 9.1 Fake backend
+- [ ] 9.2 Demo app on the SDK
+- [ ] 9.3 Manual scenario checklist
+
+## 15. Implementation decisions log
+
+Decisions taken during implementation that the Confluence pages do not cover, and changes to
+decisions. One row each: date, step, question, answer, pages or rules updated.
+
+| Date | Step | Question | Answer | Updated |
+|---|---|---|---|---|
+
+## 16. Out of scope for the first release
+
+Recorded on the parent Confluence page as open questions; not implemented until decided: wrapper SDK
+boundaries (React Native, Flutter), SDK lifecycle states and `shutdown()`, performance and
+reliability budgets, the versioned backend contract document and deduplication window, a diagnostic
+API beyond `SDK Diagnostics`, typed property overloads, `group`, a runtime log level setter, TLS and
+proxy hatches for on-prem.
