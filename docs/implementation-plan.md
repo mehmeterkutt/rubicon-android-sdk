@@ -748,16 +748,16 @@ release.
 | Disk 2b | Fixed-width index from the directory | 4.2 |  |
 | Disk 2c | One directory per key, others deleted (`api_key_changed`) | 2.3, 4.2 | 2.3: `HttpDatesAndHashingTest.sha-256` (all) |
 | Disk 2d | Main process only | 7.1, 8.1 |  |
-| Disk 3 | JSON Lines equal to the wire event, `v1` directory | 4.2, 2.4 |  |
+| Disk 3 | JSON Lines equal to the wire event, `v1` directory | 4.2, 2.4 | 2.4: `JsonTest.reading fields` (all), `JsonTest.round trip` (a line never holds a raw line break) |
 | Disk 4 | One `write()` per event, fsync points, `.tmp` recovery | 4.2, 7.4, 8.1 |  |
 | Disk 5 | Corrupt lines skipped, unreadable segments retried then deleted | 4.2 |  |
 | Disk 6 | No encryption, storage not replaceable | 2.1 | 2.1: `EventStore`, `KeyValueStore` are `@RubiconInternal` (opt-in error for apps); `InMemoryStoresTest` |
 | Disk 7 | Atomic person and device stores with `v` | 4.1 |  |
-| Serialization 1 | `org.json` `compileOnly`, one conversion layer | 1.1, 2.4 | 1.1: `android-json` `compileOnly` in `sdk-core`, absent from the release runtime classpath |
+| Serialization 1 | `org.json` `compileOnly`, one conversion layer | 1.1, 2.4 | 1.1: `android-json` `compileOnly` in `sdk-core`, absent from the release runtime classpath; 2.4: `JsonTest` (all), `JsonOnAndroidTest` |
 | Serialization 2 | Conversion table, no `java.time` | 2.5, 1.1 | 1.1: `SourceScannerTest.java time rule` (all), `SourceRulesPluginTest.check fails on a planted java time import and names the file and line` |
 | Serialization 3 | Size limits | 2.5, 6.3 |  |
 | Serialization 4 | snake_case, epoch ms, own ISO formatter | 2.3, 3.2 | 2.3: `IsoDatesTest` (all) |
-| Serialization 5 | Streamed body, golden files, independent parser | 3.2, 6.4, 8.4 |  |
+| Serialization 5 | Streamed body, golden files, independent parser | 2.4, 3.2, 6.4, 8.4 | 2.4: `JsonTest.round trip` (independent parser), `JsonOnAndroidTest` (Android's `org.json`) |
 | HTTP 1 | `HttpURLConnection` behind `HttpTransport` | 5.1 |  |
 | HTTP 2 | Always gzip, `Content-Length` | 5.1 |  |
 | HTTP 3 | 15 s / 20 s / 45 s watchdog | 5.1 |  |
@@ -793,7 +793,7 @@ release.
 - [x] 2.2 Logging infrastructure
 - [x] 2.2a Android API check for `sdk-core`
 - [x] 2.3 Identifiers and time
-- [ ] 2.4 JSON layer
+- [x] 2.4 JSON layer
 - [ ] 2.5 Property validation and normalization
 - [ ] 3.1 Configuration
 - [ ] 3.2 Event model and public types
@@ -865,6 +865,9 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-09-30 | 2.2a | Java API that Android lacks at `minSdk` in `sdk-core` | New step 2.2a: Java 8 API at compile time and Animal Sniffer with `gummy-bears-api-21`, build-only. | Root `CLAUDE.md` Dependencies |
 | 2026-09-30 | 2.3 | Obsolete HTTP date forms in `Retry-After` (RFC 850, asctime) | Not parsed; the header then counts as absent. The day name of an IMF-fixdate is not checked; a leap second counts as the next minute. Confirmed by the user. | - |
 | 2026-09-30 | 2.3 | UUIDv7 counter | RFC 9562 method 1 with a 42-bit counter (`rand_a` and the top 30 bits of `rand_b`), seeded with its top bit clear each millisecond; on overflow the timestamp moves one millisecond ahead; a clock moved back keeps the last timestamp. | - |
+| 2026-09-30 | 2.4 | `android-json` differs from Android's `org.json` | It does not keep key order (Android does). Nothing may depend on key order; `JsonOnAndroidTest` runs the layer on Android's own `org.json` through Robolectric, bringing part of Serialization 5's device check forward. Serialization 1 says `android-json` runs "the same implementation"; a note there needs the user's approval. | - |
+| 2026-09-30 | 2.4 | Trailing content after a JSON object | `org.json` ignores it (`{"a":1}}x` parses); `Json.readObject` rejects it, so such a stored line counts as corrupt. | - |
+| 2026-09-30 | 2.4 | API levels Robolectric can run | 23 to 35 on Java 17: none below 23, and 36 needs Java 21 for the tests. API 21 and 22 are covered only by the emulator suite (8.1). | `sdk-android/CLAUDE.md` Tests |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |
