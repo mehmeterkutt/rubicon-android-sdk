@@ -22,6 +22,9 @@ dependencies {
     // Android's own org.json API; the platform provides it at runtime (Serialization 1).
     compileOnly(libs.android.json)
 
+    testFixturesImplementation(libs.kotlin.stdlib)
+    testFixturesApi(libs.kotlinx.coroutines.test)
+
     testImplementation(libs.android.json)
     testImplementation(platform(libs.junit5.bom))
     testImplementation(libs.junit5.jupiter)
