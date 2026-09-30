@@ -693,7 +693,7 @@ release.
 |---|---|---|---|
 | Public API 1 | Developer holds one instance per process, no singleton | 6.7, 7.1 |  |
 | Public API 2 | `Analytics` interface, internal implementation, factory | 3.3, 6.7, 7.1 |  |
-| Public API 3 | `Map<String, Any?>` validated at the boundary | 2.5 |  |
+| Public API 3 | `Map<String, Any?>` validated at the boundary | 2.5 | `PropertyNormalizerTest` (all) |
 | Public API 4 | `beforeSend` list fixed at creation, fail-closed | 3.2, 6.3 |  |
 | Public API 5 | Public methods return `Unit` | 3.3 |  |
 | Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1, 2.1 | Build: `sdk-core` is `kotlin("jvm")`, `sdk-android` depends on it with `api`; `BuildInfoTest`, `RobolectricSetupTest`; 2.1: `TestPlatformAccessTest` |
@@ -702,7 +702,7 @@ release.
 | Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3, 6.7 |  |
 | Event Model 1 | Top level, `properties`/`traits`, `context` ownership | 3.2, 6.3 |  |
 | Event Model 2 | Sealed `TrackEvent`, `ScreenEvent`, `IdentifyEvent`; `type` on the wire | 3.2, 8.4 |  |
-| Event Model 3 | Immutable normalized maps, validated twice | 2.5, 6.3 |  |
+| Event Model 3 | Immutable normalized maps, validated twice | 2.5, 6.3 | 2.5: `PropertyNormalizerTest.deep copies` (all) |
 | Event Model 4 | `message_id` UUIDv7, never regenerated | 2.3, 6.3, 6.4 | 2.3: `UuidV7GeneratorTest` (all) |
 | Event Model 5 | Epoch ms, ISO dates in properties, `sent_at` per attempt | 2.3, 6.4 | 2.3: `IsoDatesTest` (all) |
 | Event Model 6 | Public classes, internal constructors, limited `copy` | 3.2 |  |
@@ -722,7 +722,7 @@ release.
 | Context 2 | Cached and signal-refreshed, captured at call time, carrier of the data SIM | 6.3, 7.2, 7.3 |  |
 | Context 3 | Twenty fields, unknown omitted (list to be revisited) | 7.3, 8.4 |  |
 | Context 4 | Everything in `context`, read-only for hooks | 3.2 |  |
-| Context 5 | `register`/`unregister`, validated at registration | 2.5, 6.1 |  |
+| Context 5 | `register`/`unregister`, validated at registration | 2.5, 6.1 | 2.5: `PropertyNormalizerTest.property count` (super properties dropped first) |
 | Context 6 | `context.disabledFields`, never read when disabled | 3.1, 7.3 |  |
 | Session 1 | SDK computes sessions, on every event | 6.2 |  |
 | Session 2 | UUIDv7 id plus `started_at` | 6.2 |  |
@@ -754,8 +754,8 @@ release.
 | Disk 6 | No encryption, storage not replaceable | 2.1 | 2.1: `EventStore`, `KeyValueStore` are `@RubiconInternal` (opt-in error for apps); `InMemoryStoresTest` |
 | Disk 7 | Atomic person and device stores with `v` | 4.1 |  |
 | Serialization 1 | `org.json` `compileOnly`, one conversion layer | 1.1, 2.4 | 1.1: `android-json` `compileOnly` in `sdk-core`, absent from the release runtime classpath; 2.4: `JsonTest` (all), `JsonOnAndroidTest` |
-| Serialization 2 | Conversion table, no `java.time` | 2.5, 1.1 | 1.1: `SourceScannerTest.java time rule` (all), `SourceRulesPluginTest.check fails on a planted java time import and names the file and line` |
-| Serialization 3 | Size limits | 2.5, 6.3 |  |
+| Serialization 2 | Conversion table, no `java.time` | 2.5, 1.1 | 1.1: `SourceScannerTest.java time rule` (all), `SourceRulesPluginTest.check fails on a planted java time import and names the file and line`; 2.5: `PropertyNormalizerTest.conversion table` (all) |
+| Serialization 3 | Size limits | 2.5, 6.3 | 2.5: `PropertyNormalizerTest` `property keys`, `string values`, `nesting depth`, `property count`, `event names` |
 | Serialization 4 | snake_case, epoch ms, own ISO formatter | 2.3, 3.2 | 2.3: `IsoDatesTest` (all) |
 | Serialization 5 | Streamed body, golden files, independent parser | 2.4, 3.2, 6.4, 8.4 | 2.4: `JsonTest.round trip` (independent parser), `JsonOnAndroidTest` (Android's `org.json`) |
 | HTTP 1 | `HttpURLConnection` behind `HttpTransport` | 5.1 |  |
@@ -794,7 +794,7 @@ release.
 - [x] 2.2a Android API check for `sdk-core`
 - [x] 2.3 Identifiers and time
 - [x] 2.4 JSON layer
-- [ ] 2.5 Property validation and normalization
+- [x] 2.5 Property validation and normalization
 - [ ] 3.1 Configuration
 - [ ] 3.2 Event model and public types
 - [ ] 3.3 The `Analytics` interface
@@ -865,9 +865,12 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-09-30 | 2.2a | Java API that Android lacks at `minSdk` in `sdk-core` | New step 2.2a: Java 8 API at compile time and Animal Sniffer with `gummy-bears-api-21`, build-only. | Root `CLAUDE.md` Dependencies |
 | 2026-09-30 | 2.3 | Obsolete HTTP date forms in `Retry-After` (RFC 850, asctime) | Not parsed; the header then counts as absent. The day name of an IMF-fixdate is not checked; a leap second counts as the next minute. Confirmed by the user. | - |
 | 2026-09-30 | 2.3 | UUIDv7 counter | RFC 9562 method 1 with a 42-bit counter (`rand_a` and the top 30 bits of `rand_b`), seeded with its top bit clear each millisecond; on overflow the timestamp moves one millisecond ahead; a clock moved back keeps the last timestamp. | - |
-| 2026-09-30 | 2.4 | `android-json` differs from Android's `org.json` | It does not keep key order (Android does). Nothing may depend on key order; `JsonOnAndroidTest` runs the layer on Android's own `org.json` through Robolectric, bringing part of Serialization 5's device check forward. Serialization 1 says `android-json` runs "the same implementation"; a note there needs the user's approval. | - |
+| 2026-09-30 | 2.4 | `android-json` differs from Android's `org.json` | It does not keep key order (Android does). Nothing may depend on key order; `JsonOnAndroidTest` runs the layer on Android's own `org.json` through Robolectric, bringing part of Serialization 5's device check forward. Serialization 1 said `android-json` runs "the same implementation"; the note was added with the user's approval. | Serialization page, decision 1 (version 3) |
 | 2026-09-30 | 2.4 | Trailing content after a JSON object | `org.json` ignores it (`{"a":1}}x` parses); `Json.readObject` rejects it, so such a stored line counts as corrupt. | - |
 | 2026-09-30 | 2.4 | API levels Robolectric can run | 23 to 35 on Java 17: none below 23, and 36 needs Java 21 for the tests. API 21 and 22 are covered only by the emulator suite (8.1). | `sdk-android/CLAUDE.md` Tests |
+| 2026-09-30 | 2.5 | Nesting depth counted how | A map or list that is a property value is level 1; containers are allowed up to level 3 (the `cart.items[0]` example of Serialization 3) and a container at level 4 is dropped, which also stops self-referencing maps and lists. | - |
+| 2026-09-30 | 2.5 | Which properties go over 256 | The first 256 in iteration order are kept; when super properties merge in, those not overridden by the event fill the remaining room in their own order. | - |
+| 2026-09-30 | 2.5 | Debug exception type | `IllegalArgumentException` for the first problem that throws in debug, as Configuration 3 uses; a truncation only logs, once per key. | - |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

@@ -169,7 +169,7 @@ class JsonTest {
 
         @Test
         fun `non-ASCII, escaped and control characters survive`() {
-            val text = "ğüşİıöç 日本 😀 \"quoted\" back\\slash /slash \n\t\r\b\u000c \u0001    "
+            val text = "ğüşİıöç 日本 😀 \"quoted\" back\\slash /slash \n\t\r\b\u000c \u0001 \u2028 \u2029"
             val line = Json.write(mapOf(text to text))
 
             assertEquals(mapOf(text to text), Json.readObject(line)!!.toMap())
@@ -298,7 +298,7 @@ class JsonTest {
 
     // Hostile characters included: quotes, backslashes, controls, astral and separator code points.
     private fun randomString(random: Random): String {
-        val pool = "aZ09 \"\\/\n\t\u0000\u001f ğş日😀{}[]:,"
+        val pool = "aZ09 \"\\/\n\t\u0000\u001f\u2028ğş日😀{}[]:,"
         val chars = mutableListOf<String>()
         repeat(random.nextInt(0, 12)) {
             val start = random.nextInt(pool.length)
