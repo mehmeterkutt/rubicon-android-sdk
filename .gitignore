@@ -3,6 +3,9 @@
 *.iml
 .gradle/
 .kotlin/
-build/
+# Build output of the root and of each module; a bare `build/` would also hide the
+# com.rubicon.build package in build-logic.
+/build/
+/*/build/
 local.properties
 captures/

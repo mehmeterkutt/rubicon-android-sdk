@@ -1,0 +1,3 @@
+public abstract interface annotation class com/rubicon/analytics/RubiconInternal : java/lang/annotation/Annotation {
+}
+

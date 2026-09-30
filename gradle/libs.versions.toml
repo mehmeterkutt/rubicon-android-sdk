@@ -1,0 +1,67 @@
+[versions]
+# Build toolchain. Kept equal to the demo app so it can include this build (step 9.2).
+agp = "8.12.0"
+kotlin = "2.2.10"
+ktlint-gradle = "13.1.0"
+kover = "0.9.3"
+binary-compatibility-validator = "0.18.2"
+
+# Android levels (D4).
+android-compileSdk = "36"
+android-minSdk = "21"
+
+# Shipped to customers (D5, D6). Changing one of these is a design discussion.
+kotlin-stdlib = "2.0.0"
+coroutines = "1.9.0"
+lifecycle-process = "2.4.0"
+
+# compileOnly: provided by the platform or the host app at runtime.
+android-json = "0.0.20131108.vaadin1"
+okhttp = "4.12.0"
+activity = "1.7.0"
+
+# OkHttp 5.x the interceptor tests also run against (CI matrix, D11): the newest 5.x that builds with
+# compileSdk 36. 5.5.0 requires compileSdk 37, which needs a newer AGP.
+okhttp5 = "5.4.0"
+
+# Tests only.
+junit5 = "5.13.4"
+junit4 = "4.13.2"
+mockk = "1.14.5"
+robolectric = "4.16"
+androidx-test-core = "1.7.0"
+kotlinx-serialization-json = "1.9.0"
+
+[libraries]
+kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin-stdlib" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+androidx-lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle-process" }
+androidx-activity = { module = "androidx.activity:activity", version.ref = "activity" }
+android-json = { module = "com.vaadin.external.google:android-json", version.ref = "android-json" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.ref = "okhttp" }
+
+junit5-bom = { module = "org.junit:junit-bom", version.ref = "junit5" }
+junit5-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit5-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+junit4 = { module = "junit:junit", version.ref = "junit4" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+androidx-test-core = { module = "androidx.test:core", version.ref = "androidx-test-core" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization-json" }
+
+# Gradle plugins used by build-logic.
+android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
+kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+ktlint-gradle-plugin = { module = "org.jlleitschuh.gradle:ktlint-gradle", version.ref = "ktlint-gradle" }
+kover-gradle-plugin = { module = "org.jetbrains.kotlinx:kover-gradle-plugin", version.ref = "kover" }
+binary-compatibility-validator-plugin = { module = "org.jetbrains.kotlinx:binary-compatibility-validator", version.ref = "binary-compatibility-validator" }
+
+[plugins]
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint-gradle" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+binary-compatibility-validator = { id = "org.jetbrains.kotlinx.binary-compatibility-validator", version.ref = "binary-compatibility-validator" }
