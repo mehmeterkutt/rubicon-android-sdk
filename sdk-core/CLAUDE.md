@@ -178,10 +178,12 @@ rules are in the root `CLAUDE.md`.
 - `DEBUG|INFO|WARN|ERROR|OFF`, default `WARN`, no runtime setter, independent of `debug`. ERROR = data
   lost or SDK cannot work; WARN = misconfiguration, dropped or changed data; INFO = a few lifecycle
   lines; DEBUG = every step (Logging 2). Level and repeat limit are checked before the lambda runs.
-  A stable `Code` per WARN/ERROR (`docs/issue-codes.md`), once per process, later at DEBUG (Logging 3).
+  A stable `Code` per WARN/ERROR (`docs/issue-codes.md`), once per process, later at DEBUG (Logging 3);
+  `repeatKey` makes it once per key where a decision says so (Serialization 3). New code: add it to
+  `Code` and the catalogue in the same pull request (`IssueCodesTest`).
 - Logger and `eventObserver` run behind a guard: a throwing logger -> the platform default (Logcat on
-  Android) for the rest of the process; a throwing observer -> switched off; SDK calls from inside
-  them are ignored on that thread. `eventObserver`: `Queued(event)`, `Sent(messageIds)`,
+  Android) for the rest of the process; a throwing observer -> switched off; log lines and observer
+  updates they cause on their own thread are ignored. `eventObserver`: `Queued(event)`, `Sent(messageIds)`,
   `Dropped(messageIds, reason)`; no `onError` (Logging 4).
 - Per-reason drop counters in `DeviceStore`: `queue_full`, `expired`, `backpressure`, `before_send`,
   `storage_error`, `corrupt`, `api_key_changed`, `oversize`, `rejected`, `retry_exhausted`; every

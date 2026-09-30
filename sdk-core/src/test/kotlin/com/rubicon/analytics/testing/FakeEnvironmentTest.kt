@@ -148,6 +148,7 @@ class FakeEnvironmentTest {
             assertSame(test.contextProvider, platform.contextProvider)
             assertSame(test.processInfo, platform.processInfo)
             assertSame(test.lifecycleSource, platform.lifecycleSource)
+            assertSame(test.logger, platform.logger)
             assertSame(test.eventStore, platform.eventStore)
             assertSame(test.keyValueStore, platform.keyValueStore)
             assertSame(test.storageRoot, platform.storageRoot)

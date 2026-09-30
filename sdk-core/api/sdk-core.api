@@ -1,3 +1,18 @@
+public final class com/rubicon/analytics/LogLevel : java/lang/Enum {
+	public static final field DEBUG Lcom/rubicon/analytics/LogLevel;
+	public static final field ERROR Lcom/rubicon/analytics/LogLevel;
+	public static final field INFO Lcom/rubicon/analytics/LogLevel;
+	public static final field OFF Lcom/rubicon/analytics/LogLevel;
+	public static final field WARN Lcom/rubicon/analytics/LogLevel;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/rubicon/analytics/LogLevel;
+	public static fun values ()[Lcom/rubicon/analytics/LogLevel;
+}
+
 public abstract interface annotation class com/rubicon/analytics/RubiconInternal : java/lang/annotation/Annotation {
+}
+
+public abstract interface class com/rubicon/analytics/RubiconLogger {
+	public abstract fun log (Lcom/rubicon/analytics/LogLevel;Ljava/lang/String;Ljava/lang/Throwable;)V
 }
 

@@ -539,8 +539,8 @@ Rules that apply to every test:
 - Build: one `registerDefaultNetworkCallback` per process, never unregistered (a request-based
   fallback below API 24 if D4 keeps `minSdk` 21), registered in `try/catch(Throwable)`; connected
   means `NET_CAPABILITY_INTERNET`, never `VALIDATED`; without `ACCESS_NETWORK_STATE` always connected,
-  no callback, INFO once; on registration failure query before each flush, no automatic flush on
-  network return, WARN once. The same monitor feeds context (network type, carrier) and retry.
+  no callback, WARN once (`NETWORK_STATE_PERMISSION_MISSING`); on registration failure query before
+  each flush, no automatic flush on network return, WARN once. The same monitor feeds context (network type, carrier) and retry.
 - Tests: Robolectric shadows for connect, lose, capability change, registration throwing, permission
   removed.
 
@@ -765,10 +765,10 @@ release.
 | Privacy 5b | Deep links collect `utm_*` only | 7.5 |  |
 | Privacy 5c | Network capture without headers or bodies, masked ids | 7.6 |  |
 | Privacy 6 | No IP setting in the SDK | 3.1 |  |
-| Logging 1 | `RubiconLogger`, instance-owned, Logcat default | 2.2, 7.1 |  |
-| Logging 2 | Levels, default `WARN`, repeat limit, no runtime setter | 2.2 |  |
-| Logging 3 | Inline gating | 2.2 |  |
-| Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3, 6.4 | 1.1: `SourceScannerTest.println rule` (all) |
+| Logging 1 | `RubiconLogger`, instance-owned, Logcat default | 2.2, 7.1 | 2.2: `LogTest.log lines` (all), `LoggingJavaTest` |
+| Logging 2 | Levels, default `WARN`, repeat limit, no runtime setter | 2.2 | `LogTest.repeat limit` (all), `IssueCodesTest` |
+| Logging 3 | Inline gating | 2.2 | `LogTest.level gating` (all) |
+| Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3, 6.4 | 1.1: `SourceScannerTest.println rule` (all); 2.2: `SourceScannerTest.values in log rule` (all), `LogTest.throwing logger`, `LogTest.event observer`, `LogTest.re-entrancy` (all) |
 | Logging 5 | `SDK Diagnostics` | 6.6, 5.3 |  |
 
 ## 14. Status
@@ -777,7 +777,7 @@ release.
 - [x] 1.1 Scaffold
 - [x] 1.2 CLAUDE.md files
 - [x] 2.1 Platform and test fixtures
-- [ ] 2.2 Logging infrastructure
+- [x] 2.2 Logging infrastructure
 - [ ] 2.3 Identifiers and time
 - [ ] 2.4 JSON layer
 - [ ] 2.5 Property validation and normalization
@@ -836,7 +836,18 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-09-30 | 1.1 | When to push | Each step is committed locally and reviewed by the user; push and pull request only after approval. | Working agreement 6 |
 | 2026-09-30 | 2.1 | When to commit | The user reviews the uncommitted changes; commit, push and pull request follow the approval. | Working agreement 6, root `CLAUDE.md` Git |
 | 2026-09-30 | 2.1 | `@RubiconInternal` in the `.api` files | Left out: `nonPublicMarkers` for the annotation and `ignoredPackages` for `com.rubicon.analytics.internal` (nested types carry no annotation). The `.api` files list only what applications can use; both modules ship together. SDK code opts in module-wide (`-opt-in`). | Root `CLAUDE.md` Public API |
-| 2026-09-30 | 2.1 | Visibility of `HttpResult` and `FailureKind` | Public with `@RubiconInternal`, like every `Platform` type, because `Platform` is public for `sdk-android` (Configuration 5, Disk 6). HTTP decision 4 shows them `internal`; its example needs this change. | HTTP page, decision 4 (pending approval) |
+| 2026-09-30 | 2.1 | Visibility of `HttpResult` and `FailureKind` | Public with `@RubiconInternal`, like every `Platform` type, because `Platform` is public for `sdk-android` (Configuration 5, Disk 6). | HTTP page, decision 4 (version 3) |
+| 2026-09-30 | 2.2 | Issue code catalogue | The decisions name four codes; the user approved the others in `docs/issue-codes.md` and `Code`, one per WARN or ERROR situation the decisions describe. Pending backend review. | `docs/issue-codes.md` |
+| 2026-09-30 | 2.2 | `HOST_BLOCKED` level: WARN (HTTP 6, Logging 2) or ERROR (Retry 1 group E) | WARN; the rest of group E stays ERROR. | Retry page, decision 1 (version 3) |
+| 2026-09-30 | 2.2 | Failed write level: WARN (Disk 4) or ERROR (Logging 2, 3) | ERROR, `STORAGE_WRITE_FAILED`. | Disk page, decision 4 (version 3) |
+| 2026-09-30 | 2.2 | Missing `ACCESS_NETWORK_STATE`: INFO (Retry 6) or WARN with a code (Logging 2, 5) | WARN, `NETWORK_STATE_PERMISSION_MISSING`; step 7.2 follows this. | Retry page, decision 6 (version 3) |
+| 2026-09-30 | 2.2 | Corrupt lines: ERROR per line (Disk 5) against the repeat limit (Logging 2) | The first at ERROR, later ones at DEBUG with the same detail, all counted. | Disk page, decision 5 (version 3) |
+| 2026-09-30 | 2.2 | `level.priority` in the Timber example of Logging 1 | Not added; `LogLevel` is exactly the enum of Logging 2. It can be added later without breaking anyone. | - |
+| 2026-09-30 | 2.2 | "Once per key" (Serialization 3) against "once per process per code" (Logging 2) | `repeatKey` on `warn` and `error`: once per code by default, once per key when given. | `sdk-core/CLAUDE.md` Logging |
+| 2026-09-30 | 2.2 | Level of the "custom logger threw" line | WARN, code `LOGGER_THREW` (a misconfiguration; Logging 4b gives no level). | `docs/issue-codes.md` |
+| 2026-09-30 | 2.2 | What re-entrant calls are ignored | Log lines and observer updates caused on the callback's own thread (Logging 4b); the seed said "SDK calls", which the decision does not. | `sdk-core/CLAUDE.md` Logging |
+| 2026-09-30 | 2.2 | Message format | A WARN or ERROR message starts with its code: `HOST_BLOCKED: ...`. | - |
+| 2026-09-30 | 2.2 | The platform's default logger | `Platform.logger` (Logcat on Android, `NoOpLogger` on the JVM), also the fallback of a throwing logger. | - |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |
