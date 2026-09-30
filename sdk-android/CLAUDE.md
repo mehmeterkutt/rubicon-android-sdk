@@ -111,6 +111,7 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
 ## Tests
 
 - Robolectric runs with JUnit 4 (`@RunWith(RobolectricTestRunner::class)`; it has no JUnit 5 runner);
-  pick API levels with `@Config(sdk = [...])` and cover both sides of every API check.
+  pick API levels with `@Config(sdk = [...])` and cover both sides of every API check. It runs API 23
+  to 35 here: it has no 21 or 22 (the emulator suite covers them) and 36 needs Java 21.
 - Test doubles come from `testFixtures(project(":sdk-core"))`.
 - Unit tests run on the debug variant only (`testDebugUnitTest`).

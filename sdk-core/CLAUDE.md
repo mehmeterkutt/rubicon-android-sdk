@@ -141,8 +141,9 @@ rules are in the root `CLAUDE.md`.
   files: deleted with WARN. No quarantine, no free-space check (Disk 5).
 - Stores (Disk 7): whole-file JSON with `"v"`, `.tmp` + fsync + rename, coalesced on the writer.
   Missing -> create; unreadable (corrupt, Direct Boot, newer `v`) -> in-memory, never overwrite.
-- Only the internal conversion layer touches `org.json`: `JSONObject.NULL` for null (a Kotlin null
-  removes the key); read with `has()`, never trust `opt*` defaults (Serialization 1). Tests compare
+- Only the internal conversion layer (`internal/json/Json.kt`) touches `org.json`: `JSONObject.NULL`
+  for null (a Kotlin null removes the key); read with typed checks, never `opt*` defaults; nothing
+  may depend on key order (Serialization 1). Tests compare
   structurally and parse every line with an independent parser; golden files per event type are the
   backend contract (Serialization 5).
 
