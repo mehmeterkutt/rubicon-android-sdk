@@ -1,6 +1,7 @@
 package com.rubicon.analytics.internal.platform
 
 import com.rubicon.analytics.RubiconInternal
+import com.rubicon.analytics.RubiconLogger
 import com.rubicon.analytics.internal.context.ContextProvider
 import com.rubicon.analytics.internal.http.HttpTransport
 import com.rubicon.analytics.internal.storage.EventStore
@@ -14,6 +15,8 @@ import kotlin.random.Random
  * builds the production instance; tests build one from `TestPlatform` and reach the SDK through
  * the `@RubiconInternal` factory overload. Nothing here is replaceable by developers.
  *
+ * @property logger the platform's default logger: Logcat on Android, `NoOpLogger` on the JVM. Used
+ *   when the developer sets none, and when the developer's logger throws (Logging 1, 4b).
  * @property storageRoot `noBackupFilesDir/rubicon/` on Android (Disk 2a).
  * @property fileSystem the file operations of the file-based stores, a seam for fault injection.
  */
@@ -28,6 +31,7 @@ public class Platform(
     public val contextProvider: ContextProvider,
     public val processInfo: ProcessInfo,
     public val lifecycleSource: LifecycleSource,
+    public val logger: RubiconLogger,
     public val eventStore: EventStore,
     public val keyValueStore: KeyValueStore,
     public val storageRoot: File,

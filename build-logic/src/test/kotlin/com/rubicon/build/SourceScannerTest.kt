@@ -77,6 +77,90 @@ class SourceScannerTest {
         }
     }
 
+    @Nested
+    inner class templates {
+        @Test
+        fun `keeps template expressions, which are code`() {
+            assertEquals(listOf("1:no-java-time"), violations("val s = \"now ${'$'}{java.time.Instant.now()}\""))
+        }
+
+        @Test
+        fun `keeps nested braces and strings inside a template`() {
+            val text = "val s = \"${'$'}{map.getOrElse(\"k\") { java.time.Instant.MIN }}\""
+            assertEquals(listOf("1:no-java-time"), violations(text))
+        }
+
+        @Test
+        fun `keeps templates in raw strings`() {
+            assertEquals(listOf("1:no-java-time"), violations("val s = \"\"\"a ${'$'}{java.time.Instant.MIN} b\"\"\""))
+        }
+
+        @Test
+        fun `blanks the text around a template`() {
+            val code = SourceScanner.stripCommentsAndStrings("val s = \"a ${'$'}name b\"")
+            assertEquals("val s =     name   ", code)
+        }
+    }
+
+    @Nested
+    inner class `android Log rule` {
+        @Test
+        fun `flags android util Log, imported or qualified`() {
+            val text = "import android.util.Log\nfun f() = android.util.Log.d(\"t\", \"m\")"
+            assertEquals(listOf("1:no-android-log", "2:no-android-log"), violations(text))
+        }
+
+        @Test
+        fun `allows the Logcat logger`() {
+            val path = "src/main/kotlin/" + SourceRule.LOGCAT_LOGGER
+            assertEquals(emptyList<String>(), violations("import android.util.Log", path))
+        }
+    }
+
+    @Nested
+    inner class `values in log rule` {
+        @Test
+        fun `flags a forbidden field in a template of a log message`() {
+            assertEquals(listOf("1:no-values-in-log"), violations("log.debug { \"identified ${'$'}userId\" }"))
+        }
+
+        @Test
+        fun `flags it on its own line in a multi-line call`() {
+            val text =
+                listOf(
+                    "log.warn(Code.PROPERTY_DROPPED, e) {",
+                    "    \"dropped ${'$'}key\" +",
+                    "        \" of ${'$'}{event.properties.size}\"",
+                    "}",
+                ).joinToString("\n")
+            assertEquals(listOf("3:no-values-in-log"), violations(text))
+        }
+
+        @Test
+        fun `flags every forbidden field`() {
+            listOf("properties", "traits", "userId", "deviceId", "apiKey", "headers", "body").forEach { field ->
+                assertEquals(listOf("1:no-values-in-log"), violations("log.error(Code.X) { \"${'$'}{x.$field}\" }"), field)
+            }
+        }
+
+        @Test
+        fun `allows keys, types and counts, and the words in plain text`() {
+            val text = "log.info { \"dropped ${'$'}key: ${'$'}{type.simpleName}, the userId is never logged\" }"
+            assertEquals(emptyList<String>(), violations(text))
+        }
+
+        @Test
+        fun `ignores the fields outside log calls`() {
+            val text = "val count = event.properties.size\nlog.debug { \"count ${'$'}count\" }\nsend(userId)"
+            assertEquals(emptyList<String>(), violations(text))
+        }
+
+        @Test
+        fun `ignores other receivers`() {
+            assertEquals(emptyList<String>(), violations("logger.debug { userId }"))
+        }
+    }
+
     @Test
     fun `a rule does not apply to its allowed files`() {
         val rule = SourceRule("r", "println", "reason", allowedIn = listOf("log/LogcatLogger.kt"))

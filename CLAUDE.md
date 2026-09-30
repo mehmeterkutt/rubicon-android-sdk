@@ -146,7 +146,8 @@ A pull request that breaks one does not merge.
   `checkSourceRules`). Full logging rules: `sdk-core/CLAUDE.md`.
 - Never log property or trait values, `userId`, `deviceId`, session id, the API key, header values,
   bodies or query strings, at any level; names, keys, types, counts, codes and `message_id` are fine
-  (Logging 4).
+  (Logging 4). `checkSourceRules` rejects `properties`, `traits`, `userId`, `deviceId`, `apiKey`,
+  `headers` and `body` inside a `log.*` call; compute a count outside the call.
 - Documents and code comments are in English, without emoji.
 
 ## Git and pull requests

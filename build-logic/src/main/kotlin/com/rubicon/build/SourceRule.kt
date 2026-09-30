@@ -5,16 +5,29 @@ import java.io.Serializable
 /**
  * One rule of `checkSourceRules`: [pattern] must not match the code of a main source file.
  * Comments and string literals are removed before matching, so documentation may name what the rule
- * forbids. Files whose project-relative path ends with one of [allowedIn] are exempt.
+ * forbids; template expressions inside strings are kept, since they are code. Files whose
+ * project-relative path ends with one of [allowedIn] are exempt.
  */
 data class SourceRule(
     val id: String,
     val pattern: String,
     val reason: String,
     val allowedIn: List<String> = emptyList(),
+    val scope: Scope = Scope.FILE,
 ) : Serializable {
+    enum class Scope {
+        /** Anywhere in the file. */
+        FILE,
+
+        /** Only inside calls of the SDK's log functions: `log.warn(...) { ... }`. */
+        LOG_CALL,
+    }
+
     companion object {
-        private const val serialVersionUID = 1L
+        private const val serialVersionUID = 2L
+
+        /** The file of the one class allowed to call `android.util.Log` (step 7.1). */
+        const val LOGCAT_LOGGER = "com/rubicon/analytics/internal/android/LogcatLogger.kt"
 
         /** The rules every SDK module is checked against. Later steps add their rules here. */
         val DEFAULTS: List<SourceRule> =
@@ -28,6 +41,20 @@ data class SourceRule(
                     id = "no-println",
                     pattern = """\bprintln\s*\(|\bprint\s*\(|\bSystem\s*\.\s*(out|err)\b""",
                     reason = "Log only through the internal Log functions (Logging 1 and 3).",
+                ),
+                SourceRule(
+                    id = "no-android-log",
+                    pattern = """\bandroid\s*\.\s*util\s*\.\s*Log\b""",
+                    reason = "Only the Logcat logger writes to Logcat; log through the internal Log functions (Logging 1).",
+                    allowedIn = listOf(LOGCAT_LOGGER),
+                ),
+                SourceRule(
+                    id = "no-values-in-log",
+                    pattern = """\b(properties|traits|userId|deviceId|apiKey|headers|body)\b""",
+                    reason =
+                        "Log lines never carry property or trait values, ids, the API key, headers or bodies; " +
+                            "log keys, types and counts instead (Logging 4a).",
+                    scope = Scope.LOG_CALL,
                 ),
             )
     }

@@ -17,8 +17,8 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
 - Nothing is read on the main thread in the factory. Files live under `noBackupFilesDir` (layout in
   `sdk-core/CLAUDE.md`), never in `SharedPreferences` or a backed-up directory: Auto Backup must never
   clone a `device_id` onto another phone (Identity 1, Disk 2a).
-- `logging.logger = null` -> Logcat with tag `Rubicon`; the Logcat logger is the only code that may
-  call `android.util.Log` (Logging 1).
+- `logging.logger = null` -> Logcat with tag `Rubicon`; the Logcat logger
+  (`internal/android/LogcatLogger.kt`) is the only code that may call `android.util.Log` (Logging 1).
 
 ## Lifecycle and automatic events
 
@@ -77,7 +77,8 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
 ## Permissions and network monitor
 
 - The manifest declares `INTERNET` and `ACCESS_NETWORK_STATE`. If the app removes the latter: assume
-  connected, omit `network.type`, read the carrier at most every 60 s.
+  connected, omit `network.type`, read the carrier at most every 60 s, WARN once
+  (`NETWORK_STATE_PERMISSION_MISSING`).
 - One default-network callback for the whole SDK, registered once in `try/catch(Throwable)` and never
   unregistered (a request-based fallback below API 24); on failure query before each flush.
   Connected = `NET_CAPABILITY_INTERNET`; never require `VALIDATED` (Retry 6). The same monitor feeds
