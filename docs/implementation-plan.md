@@ -10,7 +10,7 @@ design; the design lives in Confluence and is binding.
 | Source | What it holds | How to read it |
 |---|---|---|
 | Confluence, space SD, page "Analytics SDK Design Decisions" (id `3112961`) and its 14 child pages | Every design decision with its reasoning. Binding for implementation. | Atlassian MCP, `cloudId` `rubiconn.atlassian.net`, `getConfluencePage` with `contentFormat: "markdown"` |
-| `docs/claude-md-seed.md` in this repository | The day-to-day rules distilled from those pages (451 lines). Split into the repository's `CLAUDE.md` files in step 1.2, then deleted. | Read in full once, in step 1.2 |
+| `CLAUDE.md`, `sdk-core/CLAUDE.md`, `sdk-android/CLAUDE.md` | The day-to-day rules distilled from those pages, with pointers to the decisions. Written in step 1.2 from the former `docs/claude-md-seed.md` (in git history). | Loaded at the start of every session |
 | This file | Order of work, tests, done criteria, progress | Read the Status section at the start of every session |
 | `~/Projects/analytics-sdk/{posthog-android, analytics-kotlin, amplitude-kotlin, mixpanel-android, snowplow-android-tracker}` | Source of the five reference SDKs (analytics-kotlin is Segment) | Read-only, for implementation patterns. Where a reference SDK and a decision disagree, the decision wins. |
 | `~/Projects/analytics-sdk/demo-app` (repo `rubicon-team/rubicon-android-demo`) | Host app and fake backend (`fake-server/server.py`) | Used in phase 9 |
@@ -229,7 +229,7 @@ Rules that apply to every test:
 
 ### 2.2 Logging infrastructure
 
-- Read: Logging 1 to 4, `claude-md-seed.md` Code style (logging part).
+- Read: Logging 1 to 4, `sdk-core/CLAUDE.md` "Logging and diagnostics", root `CLAUDE.md` "Code style".
 - Build: public `LogLevel`, `RubiconLogger`; internal `Log` with `inline` `debug`, `info`,
   `warn(code)`, `error(code, throwable)`; `Code` enum with every WARN and ERROR code the decisions
   name (start `docs/issue-codes.md` with the same list, one line of meaning each); once-per-process
@@ -579,7 +579,7 @@ Rules that apply to every test:
 
 ### 7.6 HTTP call capture
 
-- Read: Configuration 5, Lifecycle (`Network Request`), Privacy 5, `claude-md-seed.md` "HTTP call
+- Read: Configuration 5, Lifecycle (`Network Request`), Privacy 5, `sdk-android/CLAUDE.md` "HTTP call
   capture".
 - Build: `RubiconNetworkInterceptor` with the constructor settled in D12, in the `network` package;
   pass-through when opted out, `NETWORK_REQUESTS` off (checked per request) or the instance is not
@@ -775,7 +775,7 @@ release.
 
 - [x] 0 Open decisions D1 to D13 answered and recorded in section 15
 - [x] 1.1 Scaffold
-- [ ] 1.2 CLAUDE.md files
+- [x] 1.2 CLAUDE.md files
 - [ ] 2.1 Platform and test fixtures
 - [ ] 2.2 Logging infrastructure
 - [ ] 2.3 Identifiers and time
@@ -838,6 +838,8 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |
 | 2026-09-30 | 1.1 | `sdk-android` namespace | `com.rubicon.analytics.android`, used only for the generated `R` class. | - |
 | 2026-09-30 | 1.1 | Unit test variants | `sdk-android` unit tests run on the debug variant only; release differs only in R8 (step 8.2). | - |
+| 2026-09-30 | 1.2 | Where the property rules live | Property validation and `beforeSend` (Public API 3, 4) are in the root `CLAUDE.md` with the other public API rules, which keeps `sdk-core/CLAUDE.md` below 200 lines. The root file is 166 lines, above its 150-line target. | Root, `sdk-core/CLAUDE.md` |
+| 2026-09-30 | 1.2 | Seed wording not carried over | "Open source" in the seed's first line waits for D8; the `:app` module, its commands and the fake server moved to the demo repository. | - |
 
 ## 16. Out of scope for the first release
 
