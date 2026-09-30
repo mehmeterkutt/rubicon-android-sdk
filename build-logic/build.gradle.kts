@@ -10,6 +10,7 @@ dependencies {
     compileOnly(libs.ktlint.gradle.plugin)
     compileOnly(libs.kover.gradle.plugin)
     compileOnly(libs.binary.compatibility.validator.plugin)
+    compileOnly(libs.animalsniffer.gradle.plugin)
 
     testImplementation(platform(libs.junit5.bom))
     testImplementation(libs.junit5.jupiter)

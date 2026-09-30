@@ -128,6 +128,7 @@ Every layer below is required; the step or phase that introduces it is in bracke
 | Instrumented | `sdk-android/src/androidTest` with `test-app` | AndroidX Test, UiAutomator, emulator | Process kill and recovery, real offline transitions, real `ProcessLifecycleOwner`, a second process, release build with R8, an app without OkHttp [8] |
 | Concurrency | `sdk-core/src/test/.../stress` | Real dispatchers, many threads, bounded runs | Thread safety of every public method, per-thread ordering, no lost or duplicated events under load, backpressure counting [6] |
 | Robustness | unit and integration | Seeded random inputs (no new library), fault-injecting file system and transport | Validator and serializer never throw on arbitrary input; storage failures, full disk, truncated files and unreadable stores degrade as decided [2, 4, 6] |
+| Android API | `sdk-core` main classes | Animal Sniffer with the API signature at `minSdk`, Java 8 API at compile time | No Java API that Android lacks at `minSdk` reaches `sdk-core`, which lint does not check [2.2a] |
 | Static rules | Gradle `checkSourceRules` task in `build-logic` | Plain source scan | No `java.time`, no `SimpleDateFormat` in the ISO formatter, no `okhttp3` outside `network`, no `android.util.Log` or `println` outside the Logcat logger, no `GlobalScope`, no `synchronized(this)`, no `Dispatchers.Main` in core; log calls never interpolate `properties`, `traits`, `userId`, `deviceId`, `apiKey`, `headers` or `body` (Logging 4a) [1, extended as areas arrive] |
 | API | `apiCheck`, explicit API mode | binary-compatibility-validator, `kotlin { explicitApi() }` | Every public change is visible in the `.api` diff; nothing is public by accident [1] |
 | Lint | `sdk-android` | Android lint, `NewApi` as error, `abortOnError` | API level mistakes on `minSdk` [1] |
@@ -243,6 +244,18 @@ Rules that apply to every test:
   the stack; a throwing observer is disabled after one ERROR; log calls from several threads
   concurrently.
 - Done when: every later step can log only through these functions.
+
+### 2.2a Android API check for `sdk-core`
+
+Added during step 2.2 (section 15): `sdk-core` runs on Android down to `minSdk`, but Android lint
+never sees it, and `jvmTarget` does not restrict the Java API.
+
+- Build: `sdk-core` main code compiles against the Java 8 API (`-Xjdk-release=1.8`, `--release 8`);
+  Animal Sniffer checks its classes against the Android API signature at `minSdk`
+  (`com.toasttab.android:gummy-bears-api-21`, without desugaring) in `check`. Build-only; nothing is
+  added to the artifacts. Test code is not restricted.
+- Tests: a planted `ConcurrentHashMap.newKeySet()` (API 24) fails `animalsnifferMain` with file and
+  line; a planted `java.util.List.of` (Java 9) fails compilation.
 
 ### 2.3 Identifiers and time
 
@@ -778,6 +791,7 @@ release.
 - [x] 1.2 CLAUDE.md files
 - [x] 2.1 Platform and test fixtures
 - [x] 2.2 Logging infrastructure
+- [x] 2.2a Android API check for `sdk-core`
 - [ ] 2.3 Identifiers and time
 - [ ] 2.4 JSON layer
 - [ ] 2.5 Property validation and normalization
@@ -848,6 +862,7 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-09-30 | 2.2 | What re-entrant calls are ignored | Log lines and observer updates caused on the callback's own thread (Logging 4b); the seed said "SDK calls", which the decision does not. | `sdk-core/CLAUDE.md` Logging |
 | 2026-09-30 | 2.2 | Message format | A WARN or ERROR message starts with its code: `HOST_BLOCKED: ...`. | - |
 | 2026-09-30 | 2.2 | The platform's default logger | `Platform.logger` (Logcat on Android, `NoOpLogger` on the JVM), also the fallback of a throwing logger. | - |
+| 2026-09-30 | 2.2a | Java API that Android lacks at `minSdk` in `sdk-core` | New step 2.2a: Java 8 API at compile time and Animal Sniffer with `gummy-bears-api-21`, build-only. | Root `CLAUDE.md` Dependencies |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |
