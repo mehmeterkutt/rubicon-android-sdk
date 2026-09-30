@@ -34,7 +34,7 @@ on the Disk Persistence page, and so on.
 
 1. At the start of a session read `CLAUDE.md`, then section 14 (Status) of this file, and take the
    first unchecked step. Do not work on two steps at once.
-2. One step is one branch (`feature/<step-id>-<topic>`, from `develop`) and one pull request. A step
+2. One step is one branch (`feature/<topic>`, from `develop`, no step number) and one pull request. A step
    that turns out too big is split, and the split is written into this file first.
 3. Before writing code for a step, read the decisions listed under "Read" in full, not only their
    summary rows. Read the reference SDK code named there when the step says so.
@@ -46,8 +46,9 @@ on the Disk Persistence page, and so on.
    decision, tell the user which Confluence page and which `CLAUDE.md` rule need the change; update
    them after approval.
 6. Done means every item of section 6 (Definition of done) holds. Then tick the step in section 14,
-   fill its rows in the traceability table (section 13), commit, push, open the pull request and stop
-   for review. Never merge, and never push to `develop` or `master`.
+   fill its rows in the traceability table (section 13), commit and stop for review: the user reviews
+   the local branch first. Push and open the pull request only after the user approves. Never merge,
+   and never push to `develop` or `master`.
 7. Documents and code comments are in English, without emoji.
 
 ## 3. Open decisions to settle before step 1.1
@@ -182,8 +183,8 @@ Rules that apply to every test:
     OkHttp 4.12 in `sdk-android`. Test dependencies as in section 5.
   - `checkSourceRules` task wired into `check`, starting with the `java.time` and `println` rules.
   - Generated `BuildInfo.VERSION` constant from the version property (D9).
-  - CI workflow (D11), pull request template, `README.md` stub, `LICENSE`, `CHANGELOG.md`,
-    `.gitignore`.
+  - CI workflow (D11), pull request template, `README.md` stub, `CHANGELOG.md`, `.gitignore`.
+    `LICENSE` waits for D8.
 - Tests: one trivial test per module so the test tasks, JUnit 5 and Robolectric runners, Kover and CI
   are proven; a test that `checkSourceRules` fails on a planted `java.time` import (task test using
   a temporary source set or Gradle TestKit).
@@ -596,6 +597,8 @@ Rules that apply to every test:
 
 - Build: `:test-app` (D10) with a main process, a `:remote` process service, two activities, a deep
   link, an OkHttp client with the interceptor.
+- Running the emulator suite in GitHub Actions is decided after development (D11); until then it
+  runs locally.
 - Tests (emulator, on the lowest supported API level and the latest; Serialization 5 asks for the
   `org.json` behaviour tests of step 2.4 to run here too): kill the process while writing 500
   events, restart, every accepted event arrives, and a repeat only ever carries the same
@@ -628,7 +631,7 @@ Rules that apply to every test:
   child-directed apps), interceptor setup, `eventObserver` for QA, R8 notes; `docs/issue-codes.md`
   complete.
 
-### 8.6 Publishing (after D8 is answered)
+### 8.6 Publishing (after D2 and D8 are answered)
 
 - Build: Maven Central publishing for both artifacts with sources, KDoc jar, signing, POM metadata;
   a release workflow on tags; `CHANGELOG.md` entry.
@@ -680,8 +683,8 @@ release.
 | Public API 3 | `Map<String, Any?>` validated at the boundary | 2.5 |  |
 | Public API 4 | `beforeSend` list fixed at creation, fail-closed | 3.2, 6.3 |  |
 | Public API 5 | Public methods return `Unit` | 3.3 |  |
-| Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1 |  |
-| Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 |  |
+| Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1 | Build: `sdk-core` is `kotlin("jvm")`, `sdk-android` depends on it with `api`; `BuildInfoTest`, `RobolectricSetupTest` |
+| Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 | 1.1: `explicitApi()` and `apiCheck` in `check` (gates) |
 | Public API 8 | Vocabulary and read-only `deviceId` | 3.3, 6.1, 6.5 |  |
 | Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3, 6.7 |  |
 | Event Model 1 | Top level, `properties`/`traits`, `context` ownership | 3.2, 6.3 |  |
@@ -737,8 +740,8 @@ release.
 | Disk 5 | Corrupt lines skipped, unreadable segments retried then deleted | 4.2 |  |
 | Disk 6 | No encryption, storage not replaceable | 2.1 |  |
 | Disk 7 | Atomic person and device stores with `v` | 4.1 |  |
-| Serialization 1 | `org.json` `compileOnly`, one conversion layer | 1.1, 2.4 |  |
-| Serialization 2 | Conversion table, no `java.time` | 2.5, 1.1 |  |
+| Serialization 1 | `org.json` `compileOnly`, one conversion layer | 1.1, 2.4 | 1.1: `android-json` `compileOnly` in `sdk-core`, absent from the release runtime classpath |
+| Serialization 2 | Conversion table, no `java.time` | 2.5, 1.1 | 1.1: `SourceScannerTest.java time rule` (all), `SourceRulesPluginTest.check fails on a planted java time import and names the file and line` |
 | Serialization 3 | Size limits | 2.5, 6.3 |  |
 | Serialization 4 | snake_case, epoch ms, own ISO formatter | 2.3, 3.2 |  |
 | Serialization 5 | Streamed body, golden files, independent parser | 3.2, 6.4, 8.4 |  |
@@ -765,13 +768,13 @@ release.
 | Logging 1 | `RubiconLogger`, instance-owned, Logcat default | 2.2, 7.1 |  |
 | Logging 2 | Levels, default `WARN`, repeat limit, no runtime setter | 2.2 |  |
 | Logging 3 | Inline gating | 2.2 |  |
-| Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3, 6.4 |  |
+| Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3, 6.4 | 1.1: `SourceScannerTest.println rule` (all) |
 | Logging 5 | `SDK Diagnostics` | 6.6, 5.3 |  |
 
 ## 14. Status
 
-- [ ] 0 Open decisions D1 to D13 answered and recorded in section 15
-- [ ] 1.1 Scaffold
+- [x] 0 Open decisions D1 to D13 answered and recorded in section 15
+- [x] 1.1 Scaffold
 - [ ] 1.2 CLAUDE.md files
 - [ ] 2.1 Platform and test fixtures
 - [ ] 2.2 Logging infrastructure
@@ -816,6 +819,25 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 
 | Date | Step | Question | Answer | Updated |
 |---|---|---|---|---|
+| 2026-09-30 | 0 | D1 Repository | `rubicon-team/rubicon-android-sdk`, private. `master`, `develop`, `feature/*`; feature pull requests squash-merged into `develop`, merge commits allowed for `develop` to `master` releases. | - |
+| 2026-09-30 | 0 | D2 Coordinates and packages | Packages as recommended: public `com.rubicon.analytics`, internals `com.rubicon.analytics.internal.*`; artifacts `sdk-core`, `sdk-android`. The Maven group is provisional (`group` in `gradle.properties`) and decided with D8 before step 8.6. | - |
+| 2026-09-30 | 0 | D3 Java factory name | As recommended: `RubiconAnalytics.create(context, config)`. | - |
+| 2026-09-30 | 0 | D4 `minSdk` | 21. | - |
+| 2026-09-30 | 0 | D5 Kotlin compatibility | As recommended. Compiler 2.2.10; `apiVersion` and `languageVersion` 2.0 on published code only (test code may use libraries built with a newer Kotlin); `jvmTarget` 1.8; `kotlin-stdlib` 2.0.0 declared, default stdlib dependency off. | - |
+| 2026-09-30 | 0 | D6 Shipped dependency versions | `kotlinx-coroutines-core` 1.9.0; `lifecycle-process` 2.4.0 (first version with `ProcessLifecycleInitializer`, `minSdk` 14, brings `startup-runtime` 1.0.0); OkHttp 4.12.0 `compileOnly`, supplied by the app at runtime. | - |
+| 2026-09-30 | 0 | D7 Default host | Placeholder `https://api.rubicon.example` until the production URL is known. `host` stays a code setting; the SDK reads no configuration file. | - |
+| 2026-09-30 | 0 | D8 License and publishing | Deferred. No `LICENSE` and no publishing until decided; step 8.6 waits. | - |
+| 2026-09-30 | 0 | D9 Versioning | As recommended: SemVer from `0.1.0`, the `version` Gradle property generated into `BuildInfo.VERSION`. | - |
+| 2026-09-30 | 0 | D10 Test app | As recommended: `:test-app`, not published (step 8.1). | - |
+| 2026-09-30 | 0 | D11 CI | GitHub Actions on every pull request without an emulator: `check` and the `sdk-android` tests on OkHttp 5. Coverage gates 90 percent (`sdk-core`) and 80 percent (`sdk-android`). The emulator suite in Actions is decided after development. Organization plan: free, 2000 minutes a month. | - |
+| 2026-09-30 | 0 | D12 Interceptor constructor | As recommended: `RubiconNetworkInterceptor(analytics, hosts, maskPathIds = true)`. | - |
+| 2026-09-30 | 0 | D13 `onNewIntent` without `androidx.activity` | As recommended: `androidx.activity` 1.7.0 `compileOnly`, behind a class presence check; `-dontwarn androidx.activity.**` in `consumer-rules.pro`. | - |
+| 2026-09-30 | 1.1 | Branch names | `feature/<topic>`, without the step number. | Working agreement 2 |
+| 2026-09-30 | 1.1 | When to push | Each step is committed locally and reviewed by the user; push and pull request only after approval. | Working agreement 6 |
+| 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
+| 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |
+| 2026-09-30 | 1.1 | `sdk-android` namespace | `com.rubicon.analytics.android`, used only for the generated `R` class. | - |
+| 2026-09-30 | 1.1 | Unit test variants | `sdk-android` unit tests run on the debug variant only; release differs only in R8 (step 8.2). | - |
 
 ## 16. Out of scope for the first release
 
