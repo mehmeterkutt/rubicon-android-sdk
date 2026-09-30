@@ -107,6 +107,8 @@ A pull request that breaks one does not merge.
   Retrofit, Ktor or the app's `OkHttpClient` (HTTP 1).
 - `java.time` is never used in SDK code (missing below API 26 without desugaring): `checkSourceRules`
   forbids it in main sources, lint `NewApi` is an error in `:sdk-android` (Serialization 2).
+- `:sdk-core` main code uses only Java API that Android has at `minSdk`: it compiles against Java 8
+  and `animalsnifferMain` (in `check`) rejects anything else, such as `ConcurrentHashMap.newKeySet()`.
 - Test-only dependencies are free (name them in the pull request): JUnit 5, JUnit 4, MockK,
   kotlinx-coroutines-test, MockWebServer, Robolectric, androidx.test core, android-json, and
   kotlinx-serialization-json as an independent parser.
