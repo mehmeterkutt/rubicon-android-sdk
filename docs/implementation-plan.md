@@ -709,7 +709,7 @@ release.
 | Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1, 2.1 | Build: `sdk-core` is `kotlin("jvm")`, `sdk-android` depends on it with `api`; `BuildInfoTest`, `RobolectricSetupTest`; 2.1: `TestPlatformAccessTest` |
 | Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 | 1.1: `explicitApi()` and `apiCheck` in `check` (gates); 3.1: `ConfigJavaTest`; 3.3: `AnalyticsJavaTest.everyMethodIsCallableFromJava` |
 | Public API 8 | Vocabulary and read-only `deviceId` | 3.3, 6.1, 6.5 | 3.3: `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
-| Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3, 6.7 | 3.3: contract in the KDoc of `Analytics`; `NoOpAnalyticsTest.calls from many threads at once never throw` |
+| Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3, 6.7 | 3.3: contract in the KDoc of `Analytics`; `NoOpAnalyticsTest.calls from many threads at once never throw`; 6.1: `IdentityTest` `ordering` (identify then snapshot, calls before load in call order) |
 | Event Model 1 | Top level, `properties`/`traits`, `context` ownership | 3.2, 6.3 | 3.2: `EventModelTest.golden files` (all) |
 | Event Model 2 | Sealed `TrackEvent`, `ScreenEvent`, `IdentifyEvent`; `type` on the wire | 3.2, 8.4 | 3.2: `EventModelTest.golden files` (all) |
 | Event Model 3 | Immutable normalized maps, validated twice | 2.5, 6.3 | 2.5: `PropertyNormalizerTest.deep copies` (all) |
@@ -722,17 +722,17 @@ release.
 | Configuration 4 | Snapshot and freeze | 3.1 | `ConfigValidatorTest` `config snapshot`, `frozen config` |
 | Configuration 5 | Public hatches, internal `Platform`, `HttpURLConnection`, OkHttp `compileOnly` | 2.1, 5.1, 7.6 | 2.1: `FakeEnvironmentTest.test platform` (all), `TestPlatformAccessTest`; 5.1: `HttpURLConnectionTransportTest`.`the production constructor takes its parts from the platform` |
 | Configuration 6 | No platform types in configuration | 3.1 | `ConfigJavaTest` (the whole configuration compiles and runs on the JVM) |
-| Identity 1 | `deviceId` and `userId` in files outside backup | 4.1, 6.1, 7.1 | 4.1: `DeviceStoreTest` `missing and unreadable`, `files left byte-identical`; `PersonStoreTest` likewise |
-| Identity 2 | Implicit merge: both ids on every event | 3.2, 6.1 | 3.2: `EventModelTest.golden files.an anonymous user is sent as a null user id` |
-| Identity 3 | One `identify`, set-only traits never stored | 6.1 |  |
-| Identity 4 | Different id means person reset, then identify | 6.1, 6.2 |  |
-| Identity 5 | `reset` clears person data only, no event | 4.1, 6.1 | 4.1: `PersonStoreTest.person json has exactly the decided keys`, `DeviceStoreTest.device json has exactly the decided keys`, `remote config json has exactly the decided keys` |
+| Identity 1 | `deviceId` and `userId` in files outside backup | 4.1, 6.1, 7.1 | 4.1: `DeviceStoreTest` `missing and unreadable`, `files left byte-identical`; `PersonStoreTest` likewise; 6.1: `IdentityTest` `device id` |
+| Identity 2 | Implicit merge: both ids on every event | 3.2, 6.1 | 3.2: `EventModelTest.golden files.an anonymous user is sent as a null user id`; 6.1: `IdentityTest` (every snapshot carries both ids) |
+| Identity 3 | One `identify`, set-only traits never stored | 6.1 | `IdentityTest` `identify rules`, `invalid user ids` |
+| Identity 4 | Different id means person reset, then identify | 6.1, 6.2 | 6.1: `IdentityTest`.`a different id clears the person's state first` |
+| Identity 5 | `reset` clears person data only, no event | 4.1, 6.1 | 4.1: `PersonStoreTest.person json has exactly the decided keys`, `DeviceStoreTest.device json has exactly the decided keys`; 6.1: `IdentityTest`.`reset clears user and all super properties`; `remote config json has exactly the decided keys` |
 | Identity 6 | No alias | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
 | Context 1 | Internal `ContextProvider`, `ContextStep`, nothing on the main thread | 2.1, 6.3, 7.3 |  |
 | Context 2 | Cached and signal-refreshed, captured at call time, carrier of the data SIM | 6.3, 7.2, 7.3 |  |
 | Context 3 | Twenty fields, unknown omitted (list to be revisited) | 7.3, 8.4 |  |
 | Context 4 | Everything in `context`, read-only for hooks | 3.2 | `EventModelTest.read-only for hooks` (all), `EventJavaTest.contextIsReadThroughGetters` |
-| Context 5 | `register`/`unregister`, validated at registration | 2.5, 6.1 | 2.5: `PropertyNormalizerTest.property count` (super properties dropped first) |
+| Context 5 | `register`/`unregister`, validated at registration | 2.5, 6.1 | 2.5: `PropertyNormalizerTest.property count` (super properties dropped first); 6.1: `IdentityTest` `reset and super properties` |
 | Context 6 | `context.disabledFields`, never read when disabled | 3.1, 7.3 | 3.1: `ConfigValidatorTest.default values` (18 values, no `LIBRARY_*`) |
 | Session 1 | SDK computes sessions, on every event | 6.2 |  |
 | Session 2 | UUIDv7 id plus `started_at` | 6.2 |  |
@@ -813,7 +813,7 @@ release.
 - [x] 5.1 HTTP transport
 - [x] 5.2 Retry policy and backoff
 - [x] 5.3 Remote configuration
-- [ ] 6.1 Identity and super properties
+- [x] 6.1 Identity and super properties
 - [ ] 6.2 Session
 - [ ] 6.3 Writer and pipeline
 - [ ] 6.4 Uploader
@@ -931,6 +931,9 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 5.3 | What is saved | The response object as received, with its `ETag`, in `remote-config.json`; it is validated again at every launch against that launch's code, so a stricter app release is never widened by an old response. A 404 deletes it; any other failure keeps it. | `RemoteConfigClient`, `DeviceStore` |
 | 2026-10-01 | 5.3 | Sampling | 52 bits of SHA-256 of a purpose salt and `device_id` give a position in `[0, 1)`; `events` and `diagnostics` use different salts so they draw independently. | `Sampling` |
 | 2026-10-01 | 5.3 | The immediate flags | `RuntimeFlags` only turn off within a process; turning back on waits for the next launch. Network request capture is also off at startup when the effective configuration lacks `NETWORK_REQUESTS`, so the interceptor checks one flag (7.6). The pipeline and uploader honour `collecting` in 6.3 and 6.4. | `RuntimeFlags` |
+| 2026-10-01 | 6.1 | Calls before the stores are loaded (the writer loads them first, Privacy 2; the factory never reads on the main thread) | Kept in call order and applied by the writer right after loading; snapshots taken meanwhile are filled at the same point, so `identify` then `track` still carries the new id and nothing is read on the calling thread. After loading, the synchronous in-memory path. Chosen by the user. | `Identity` |
+| 2026-10-01 | 6.1 | `deviceId` before the writer has loaded `device.json` | Read once on the calling thread, like `isOptedOut()` (Public API 9), sharing one read with the writer so only one id is ever generated; a missing file's new id is written by the writer, never on the calling thread. Chosen by the user; Public API 9 lists the getter next to `isOptedOut()`. | `Identity`, `DeviceStore.readEarly`, Confluence Public API 9 |
+| 2026-10-01 | 6.1 | Hooks for the session (Session 6, step 6.2) | `Identity` calls `onPersonCleared` with the old identity before `reset()` or a user switch clears the person, so 6.2 can end the session with the old `user_id` first. | `Identity` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

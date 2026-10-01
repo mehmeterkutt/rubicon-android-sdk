@@ -19,7 +19,8 @@ package com.rubicon.analytics
  * 1. Every method can be called from any thread.
  * 2. No method blocks: disk and network work never runs on the calling thread. The calling thread
  *    only copies the arguments, validates properties and takes a snapshot of identity and super
- *    properties. The one exception is [isOptedOut] in the first milliseconds after startup.
+ *    properties. The exceptions are [isOptedOut] and [deviceId] in the first milliseconds after
+ *    startup, which may read a small file once.
  * 3. Calls made from the same thread take effect in call order. [identify], [reset], [register] and
  *    [unregister] change in-memory state at once and persist later, so a [track] after [identify]
  *    carries the new identity. There is no order between calls on different threads.
@@ -121,7 +122,8 @@ public interface Analytics {
 
     /**
      * The id of this installation, sent with every event, for example to request erasure on your
-     * backend. It changes only with [clearLocalData]; [reset] keeps it.
+     * backend. It changes only with [clearLocalData]; [reset] keeps it. Read in the first milliseconds
+     * after startup, it may read a small file once on the calling thread.
      */
     public val deviceId: String
 }

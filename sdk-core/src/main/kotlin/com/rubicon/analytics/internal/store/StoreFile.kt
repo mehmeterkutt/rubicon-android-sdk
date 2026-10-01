@@ -51,9 +51,11 @@ internal class StoreFile<T : Any>(
     val value: T?
         get() = current
 
+    /** With [writeMissing] `false` a missing file's value stays unwritten until the next [persist]. */
     fun load(
         onMissing: () -> T?,
         onUnreadable: () -> T?,
+        writeMissing: Boolean = true,
     ) {
         val loaded =
             when (val read = keyValueStore.read(name)) {
@@ -66,7 +68,11 @@ internal class StoreFile<T : Any>(
             }
         synchronized(lock) { current = loaded }
         isLoaded = true
-        if (loaded != null) persist() else synchronized(lock) { dirty = false }
+        if (loaded == null) {
+            synchronized(lock) { dirty = false }
+        } else if (writeMissing) {
+            persist()
+        }
     }
 
     fun update(transform: (T?) -> T?) {
