@@ -730,7 +730,7 @@ release.
 | Event Model 4 | `message_id` UUIDv7, never regenerated | 2.3, 6.3, 6.4 | 2.3: `UuidV7GeneratorTest` (all) |
 | Event Model 5 | Epoch ms, ISO dates in properties, `sent_at` per attempt | 2.3, 6.4 | 2.3: `IsoDatesTest` (all) |
 | Event Model 6 | Public classes, internal constructors, limited `copy` | 3.2, 6.3a | `EventModelTest` `limited copy`, `read-only for hooks`, `safe descriptions`; `EventJavaTest.copyHasJavaOverloads`; 6.3a: `EventPipelineTest` `results that are not a copy` |
-| Configuration 1 | Code plus restrict-only remote, allowlist, next launch, two immediate flags | 5.3, 6.3, 6.4 | 5.3: `RemoteConfigTest` `validation`, `the client` (200, 304, 404, failures, kill switch, network requests, restart); `docs/remote-config.md` |
+| Configuration 1 | Code plus restrict-only remote, allowlist, next launch, two immediate flags | 5.3, 6.3, 6.4 | 5.3: `RemoteConfigTest` `validation`, `the client` (200, 304, 404, failures, kill switch, network requests, restart); `docs/remote-config.md`; 6.4: `UploaderTest` `remote configuration` (once per launch, also with uploads gated), `the kill switch blocks uploads` |
 | Configuration 2 | One class, small groups, tuning internal | 3.1 | `ConfigValidatorTest.default values` (all), `ConfigJavaTest` |
 | Configuration 3 | Only `apiKey` required, factory validation, one instance, main process | 3.1, 6.7, 7.1 | 3.1: `ConfigValidatorTest` `api key`, `host url`, `numeric bounds`, `custom headers` |
 | Configuration 4 | Snapshot and freeze | 3.1 | `ConfigValidatorTest` `config snapshot`, `frozen config` |
@@ -760,10 +760,10 @@ release.
 | Lifecycle 4 | Install and update detection | 7.4 |  |
 | Lifecycle 5 | Plain names, `source` `app`/`auto` | 3.2, 7.4 | 3.2: `EventModelTest.wire names` |
 | Lifecycle 6 | `Autocapture` set and defaults, `NETWORK_REQUESTS` off at once | 3.1, 5.3, 7.4, 7.6 | 3.1: `ConfigValidatorTest.default values` |
-| Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3b, 6.4 | 6.3b: `WriterTest` (single writer, channel of 1000, backpressure, conflated upload signal) |
-| Queue 2 | Flush triggers and suppression, no WorkManager | 6.3b, 6.4, 7.4 | 6.3b: `WriterTest` `flush triggers` |
+| Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3b, 6.4 | 6.3b: `WriterTest` (single writer, channel of 1000, backpressure, conflated upload signal); 6.4: `UploaderTest`.`no two requests overlap under a burst of signals` |
+| Queue 2 | Flush triggers and suppression, no WorkManager | 6.3b, 6.4, 7.4 | 6.3b: `WriterTest` `flush triggers`; 6.4: `UploaderTest` `gates` |
 | Queue 3 | 30 events or 60 s, bounds, remote only raises | 3.1, 5.3 | 3.1: `ConfigValidatorTest.numeric bounds` (flush); 5.3: `RemoteConfigTest`.`flushing can only become less frequent` |
-| Queue 4 | 100 events / 512 KB batches, oldest first, sequential | 4.2, 6.4 | 4.2: `FileEventStoreTest` `segments` (closes at 100 events and before 512 KB) |
+| Queue 4 | 100 events / 512 KB batches, oldest first, sequential | 4.2, 6.4 | 4.2: `FileEventStoreTest` `segments` (closes at 100 events and before 512 KB); 6.4: `UploaderTest`.`batches go oldest first, are deleted after 2xx, and Sent lists their ids`, `it stops at the first failure` |
 | Queue 5 | 1000 events, 3 days, drop counters | 4.2, 6.6 | 4.2: `FileEventStoreTest` `capacity`, `age limit` (exactly 3 days kept) |
 | Queue 6 | No public flush policy, no pause or resume | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
 | Queue 7 | `flush.immediateEvents` | 3.1, 6.3b | 3.1: `ConfigValidatorTest.config snapshot`; 6.3b: `WriterTest`.`an immediate event flushes after it is stored, matched exactly`, `the name that counts is the final one, after the hooks` |
@@ -789,10 +789,10 @@ release.
 | HTTP 5 | Bearer key, User-Agent, no redirects | 5.1 | `HttpURLConnectionTransportTest` `custom headers never replace the SDK's own`, `a redirect is not followed` |
 | HTTP 6 | No transport extras, blocked-host check | 5.1 | `HttpURLConnectionTransportTest` `BLOCKED, logged once`, `localhost and IP hosts are never checked`, `bodies are never logged` |
 | Retry 1 | Five groups, only a bad batch deleted | 5.2 | `RetryPolicyTest` `classification` (one row per code and kind), `configuration problems` |
-| Retry 2 | Backoff table with jitter, 1 h for configuration problems | 5.2 | `RetryPolicyTest` `backoff`, `network regained`, `pause one hour plus or minus 20 percent` |
-| Retry 3 | `Retry-After` cap and floor, poison-batch rule | 2.3, 5.2, 6.4 | 2.3: `HttpDatesAndHashingTest.http dates` (all); 5.2: `RetryPolicyTest` `Retry-After`, `poison batch` |
+| Retry 2 | Backoff table with jitter, 1 h for configuration problems | 5.2, 6.4 | `RetryPolicyTest` `backoff`, `network regained`, `pause one hour plus or minus 20 percent`; 6.4: `UploaderTest`.`the network coming back ends a wait caused by the network`, `a wait blocks new attempts until it ends` |
+| Retry 3 | `Retry-After` cap and floor, poison-batch rule | 2.3, 5.2, 6.4 | 2.3: `HttpDatesAndHashingTest.http dates` (all); 5.2: `RetryPolicyTest` `Retry-After`, `poison batch`; 6.4: `UploaderTest`.`a batch is kept on failure, retried after the wait with a new sent_at` |
 | Retry 4 | 413 as configuration problem, server answers 200 | 5.2 | `RetryPolicyTest`.`status codes` (413 is CONFIG); success bodies are never read (5.1) |
-| Retry 5 | Pipeline wait and per-segment attempts persisted, clock guard | 4.1, 5.2 | 4.1: `DeviceStoreTest.the state and the cache read back as written` (retry object); 5.2: `RetryPolicyTest` `persistence` (restart, clock moved back by a day) |
+| Retry 5 | Pipeline wait and per-segment attempts persisted, clock guard | 4.1, 5.2, 6.4 | 4.1: `DeviceStoreTest.the state and the cache read back as written` (retry object); 5.2: `RetryPolicyTest` `persistence` (restart, clock moved back by a day); 6.4: `UploaderTest`.`retry state changes are handed to the writer` |
 | Retry 6 | One default-network callback, `INTERNET` without `VALIDATED` | 7.2 |  |
 | Privacy 1 | `optOut` stops new events, queue still sends | 6.5, 7.6 |  |
 | Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3b, 6.5 | 4.1: `DeviceStoreTest.consent is null, granted or denied`; 6.3b: `WriterTest`.`the stores are loaded and written by the writer` |
@@ -805,7 +805,7 @@ release.
 | Logging 1 | `RubiconLogger`, instance-owned, Logcat default | 2.2, 7.1 | 2.2: `LogTest.log lines` (all), `LoggingJavaTest` |
 | Logging 2 | Levels, default `WARN`, repeat limit, no runtime setter | 2.2 | `LogTest.repeat limit` (all), `IssueCodesTest` |
 | Logging 3 | Inline gating | 2.2 | `LogTest.level gating` (all) |
-| Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3b, 6.4 | 1.1: `SourceScannerTest.println rule` (all); 2.2: `SourceScannerTest.values in log rule` (all), `LogTest.throwing logger`, `LogTest.event observer`, `LogTest.re-entrancy` (all); 3.2: `EventJavaTest.anObserverIsAJavaLambda`, `EventModelTest.safe descriptions`; 6.3b: `WriterTest` `the observer and drops` |
+| Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3b, 6.4 | 1.1: `SourceScannerTest.println rule` (all); 2.2: `SourceScannerTest.values in log rule` (all), `LogTest.throwing logger`, `LogTest.event observer`, `LogTest.re-entrancy` (all); 3.2: `EventJavaTest.anObserverIsAJavaLambda`, `EventModelTest.safe descriptions`; 6.3b: `WriterTest` `the observer and drops`; 6.4: `UploaderTest` (`Sent` and `Dropped` updates) |
 | Logging 5 | `SDK Diagnostics` | 4.1, 6.6, 5.3 | 4.1: `DeviceStoreTest` `diagnostics counters`; 5.3: `RemoteConfigTest` `sampling`, `diagnostics follow the code switch and their own sample rate` |
 
 ## 14. Status
@@ -831,7 +831,7 @@ release.
 - [x] 6.2 Session
 - [x] 6.3a Event pipeline
 - [x] 6.3b Writer
-- [ ] 6.4 Uploader
+- [x] 6.4 Uploader
 - [ ] 6.5 Privacy
 - [ ] 6.6 SDK Diagnostics
 - [ ] 6.7 `DefaultAnalytics` and the core factory
@@ -963,6 +963,11 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 6.3b | The count trigger with events pending that cannot be sent | It counts the events appended since the last flush, starting at process start from the events left over (Queue 2: "including events left by a previous process"); any flush resets it. Counting everything pending would flush, and close a one-event segment, on every new event while offline. | `Writer` |
 | 2026-10-01 | 6.3b | Consent changes and `clearLocalData` | Their messages are added with their behaviour in 6.5 (Privacy), which owns those rules; the writer has the message channel they will use. | Step 6.5 |
 | 2026-10-01 | 6.3b | Writer details | The stores are written after every message when something changed. Lifecycle, network and person-cleared signals share the event channel, so they keep their order; if it is full they are skipped with a DEBUG line. An event created while `collecting` is off is not written. A `backpressure` drop is reported to the observer from the calling thread, since the event never reaches the writer. 6.3a and 6.3b go in one pull request, as the user asked. | `Writer` |
+| 2026-10-01 | 6.4 | Waking during a wait | A wait sleeps until it ends or the next wake (flush, network); a wake checks the rules again, so the network coming back ends a network wait at once (Retry 2) while server waits go on unchanged. | `Uploader` |
+| 2026-10-01 | 6.4 | When the remote configuration is fetched | At the first wake with the network there, once per launch, before the upload gates: also while opted out, pending or switched off (Configuration 1, Privacy 4). | `Uploader` |
+| 2026-10-01 | 6.4 | Startup order of the uploader | It waits for the writer's startup (stores loaded), restores the retry state and fetches the remote configuration if the network is there. It sends nothing until a flush trigger fires: no startup upload (Queue 2); leftovers go with the interval the writer starts for them. | `Uploader`, `Writer.started` |
+| 2026-10-01 | 6.4 | The consent gate | `uploadsAllowed`, `true` until step 6.5 wires opted out and pending to it. | Step 6.5 |
+| 2026-10-01 | 6.4 | A segment that cannot be read | Skipped for the rest of the drain, so the next one is tried; the store deletes it after three failures (Disk 5). A segment with nothing left to send is deleted without a request. | `Uploader` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

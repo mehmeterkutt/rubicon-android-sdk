@@ -19,6 +19,7 @@ import com.rubicon.analytics.internal.session.SessionEvent
 import com.rubicon.analytics.internal.session.SessionManager
 import com.rubicon.analytics.internal.store.DeviceStore
 import com.rubicon.analytics.internal.store.PersonStore
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -83,6 +84,9 @@ internal class Writer(
     /** Conflated: any number of flushes during an upload become one follow-up upload (Queue 1). */
     val uploadSignal: Channel<Unit> = Channel(Channel.CONFLATED)
 
+    /** Completes once the startup work is done and the stores are loaded; the uploader waits for it. */
+    val started: CompletableDeferred<Unit> = CompletableDeferred()
+
     // Set up at start, on the writer.
     private lateinit var snapshot: ConfigSnapshot
     private lateinit var sessions: SessionManager
@@ -112,7 +116,11 @@ internal class Writer(
     /** Starts the writer: its startup work first, then the messages in order. */
     fun start(): Job =
         scope.launch(platform.dispatchers.writer) {
-            guarded { startUp() }
+            try {
+                guarded { startUp() }
+            } finally {
+                started.complete(Unit)
+            }
             for (message in channel) guarded { handle(message) }
         }
 
