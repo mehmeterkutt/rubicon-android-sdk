@@ -6,3 +6,10 @@ public abstract interface annotation class com/rubicon/analytics/ScreenName : ja
 	public abstract fun value ()Ljava/lang/String;
 }
 
+public final class com/rubicon/analytics/network/RubiconNetworkInterceptor : okhttp3/Interceptor {
+	public fun <init> (Lcom/rubicon/analytics/Analytics;Ljava/util/Set;)V
+	public fun <init> (Lcom/rubicon/analytics/Analytics;Ljava/util/Set;Z)V
+	public synthetic fun <init> (Lcom/rubicon/analytics/Analytics;Ljava/util/Set;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun intercept (Lokhttp3/Interceptor$Chain;)Lokhttp3/Response;
+}
+

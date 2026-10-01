@@ -6,7 +6,8 @@ import java.io.Serializable
  * One rule of `checkSourceRules`: [pattern] must not match the code of a main source file.
  * Comments and string literals are removed before matching, so documentation may name what the rule
  * forbids; template expressions inside strings are kept, since they are code. Files whose
- * project-relative path ends with one of [allowedIn] are exempt.
+ * project-relative path ends with one of [allowedIn] are exempt; an entry ending with `/` exempts
+ * every file under that directory.
  */
 data class SourceRule(
     val id: String,
@@ -28,6 +29,9 @@ data class SourceRule(
 
         /** The file of the one class allowed to call `android.util.Log` (step 7.1). */
         const val LOGCAT_LOGGER = "com/rubicon/analytics/internal/android/LogcatLogger.kt"
+
+        /** The one package allowed to reference OkHttp, which apps may not have (step 7.6). */
+        const val NETWORK_PACKAGE = "com/rubicon/analytics/network/"
 
         /** The rules every SDK module is checked against. Later steps add their rules here. */
         val DEFAULTS: List<SourceRule> =
@@ -55,6 +59,14 @@ data class SourceRule(
                         "Log lines never carry property or trait values, ids, the API key, headers or bodies; " +
                             "log keys, types and counts instead (Logging 4a).",
                     scope = Scope.LOG_CALL,
+                ),
+                SourceRule(
+                    id = "okhttp-only-in-network",
+                    pattern = """\bokhttp3\b""",
+                    reason =
+                        "OkHttp is compileOnly: only com.rubicon.analytics.network may reference it, so apps " +
+                            "without OkHttp never load it (Configuration 5).",
+                    allowedIn = listOf(NETWORK_PACKAGE),
                 ),
             )
     }

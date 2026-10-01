@@ -167,4 +167,17 @@ class SourceScannerTest {
         val path = "src/main/kotlin/com/x/log/LogcatLogger.kt"
         assertEquals(emptyList<SourceRuleViolation>(), SourceScanner.findViolations(path, "println()", listOf(rule)))
     }
+
+    @Test
+    fun `OkHttp is allowed under the network package only`() {
+        val rules = SourceRule.DEFAULTS
+        val inside = "src/main/kotlin/com/rubicon/analytics/network/RubiconNetworkInterceptor.kt"
+        val outside = "src/main/kotlin/com/rubicon/analytics/internal/android/AndroidPlatform.kt"
+
+        assertEquals(emptyList<SourceRuleViolation>(), SourceScanner.findViolations(inside, "import okhttp3.Interceptor", rules))
+        assertEquals(
+            listOf("okhttp-only-in-network"),
+            SourceScanner.findViolations(outside, "import okhttp3.Interceptor", rules).map { it.rule.id },
+        )
+    }
 }

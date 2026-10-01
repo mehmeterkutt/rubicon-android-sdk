@@ -11,8 +11,11 @@ import androidx.core.util.Consumer
 import androidx.test.core.app.ApplicationProvider
 import com.rubicon.analytics.AnalyticsConfig
 import com.rubicon.analytics.Autocapture
+import com.rubicon.analytics.LogLevel
 import com.rubicon.analytics.ScreenName
 import com.rubicon.analytics.internal.AutomaticCapture
+import com.rubicon.analytics.internal.log.Log
+import com.rubicon.analytics.testing.RecordingLogger
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -69,6 +72,11 @@ class ActivityCaptureTest {
 
     private val capture =
         object : AutomaticCapture {
+            override val capturesNetworkRequests: Boolean = false
+            override val sdkHost: String = ""
+            override val debug: Boolean = false
+            override val log: Log = Log(LogLevel.DEBUG, null, RecordingLogger())
+
             override fun track(
                 gate: Autocapture,
                 name: String,

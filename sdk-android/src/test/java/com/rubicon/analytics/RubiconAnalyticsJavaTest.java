@@ -4,6 +4,7 @@ import static org.junit.Assert.assertNotNull;
 
 import android.app.Application;
 import androidx.test.core.app.ApplicationProvider;
+import com.rubicon.analytics.network.RubiconNetworkInterceptor;
 import com.rubicon.analytics.internal.RubiconCore;
 import java.util.Collections;
 import org.junit.After;
@@ -30,5 +31,20 @@ public class RubiconAnalyticsJavaTest {
         analytics.track("Opened", Collections.emptyMap());
 
         assertNotNull(analytics.getDeviceId());
+    }
+
+    @Test
+    public void javaCreatesTheNetworkInterceptorWithAndWithoutMasking() {
+        Analytics analytics = RubiconAnalytics.create(ApplicationProvider.getApplicationContext(), javaConfig());
+
+        assertNotNull(new RubiconNetworkInterceptor(analytics, Collections.singleton("api.shop.com")));
+        assertNotNull(new RubiconNetworkInterceptor(analytics, Collections.singleton("*.shop.com"), false));
+    }
+
+    private static AnalyticsConfig javaConfig() {
+        AnalyticsConfig config = new AnalyticsConfig("rk_java");
+        config.setHost("http://127.0.0.1:9");
+        config.getLogging().setSendDiagnostics(false);
+        return config;
     }
 }

@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
+import java.net.URI
 
 /**
  * The real [Analytics] (Public API 2): the calling thread only validates, copies and snapshots, and
@@ -31,7 +32,7 @@ import kotlinx.coroutines.runBlocking
 internal class DefaultAnalytics(
     private val code: ConfigSnapshot,
     private val platform: Platform,
-    private val log: Log,
+    override val log: Log,
     private val identity: Identity,
     private val consent: ConsentController,
     private val flags: RuntimeFlags,
@@ -149,6 +150,13 @@ internal class DefaultAnalytics(
         name: String,
         properties: Map<String, Any?>,
     ): Unit = automatic { capture(CapturedEvent.Type.SCREEN, name, properties, EventSource.AUTO, gate, strict = false) }
+
+    override val capturesNetworkRequests: Boolean
+        get() = flags.capturingNetworkRequests && Autocapture.NETWORK_REQUESTS in code.autocapture && creating
+
+    override val sdkHost: String = URI(code.host).host.orEmpty()
+
+    override val debug: Boolean get() = code.debug
 
     // Called from the SDK's own callbacks, where a throw would reach the app: a bad name, such as an
     // invalid @ScreenName value, is a WARN even in debug.

@@ -117,7 +117,8 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
 - Headers and bodies are never captured, by any option. Query and fragment are never sent. Path
   segments that are all digits, a UUID or hex longer than 16 characters become `:id` in `path` and
   `url` (`maskPathIds`, default `true`) (Privacy 5c). Which hosts to capture is opt-in; nothing is
-  captured for an unconfigured host.
+  captured for an unconfigured host. Hosts: an exact name or `*.domain.tld` (subdomains only).
+- `error`: `canceled`, `timeout`, `unknown_host`, `connect`, `tls`, else the simple class name.
 
 ## Tests
 

@@ -5,12 +5,18 @@ object SourceScanner {
     // A call of one of the SDK's log functions on its `log` instance (Logging 3).
     private val LOG_CALL = Regex("""\blog\s*\.\s*(debug|info|warn|error)\b""")
 
+    // A file by the end of its path, or, ending with a slash, every file under a directory.
+    private fun allows(
+        path: String,
+        allowed: String,
+    ): Boolean = if (allowed.endsWith("/")) path.contains(allowed) else path.endsWith(allowed)
+
     fun findViolations(
         path: String,
         text: String,
         rules: List<SourceRule>,
     ): List<SourceRuleViolation> {
-        val applicable = rules.filter { rule -> rule.allowedIn.none { path.endsWith(it) } }
+        val applicable = rules.filter { rule -> rule.allowedIn.none { allows(path, it) } }
         if (applicable.isEmpty()) return emptyList()
         val code = stripCommentsAndStrings(text)
         val lineStarts = lineStarts(code)

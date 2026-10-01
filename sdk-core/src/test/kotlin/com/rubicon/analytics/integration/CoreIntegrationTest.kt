@@ -108,6 +108,25 @@ class CoreIntegrationTest {
     }
 
     @Test
+    fun `network capture follows the configuration and the consent, and knows the SDK's host`() {
+        var capture: AutomaticCapture? = null
+        val analytics = RubiconCore.create(config(server), platform(root, FakeNetworkMonitor())) { capture = it }
+
+        assertTrue(capture!!.capturesNetworkRequests)
+        assertEquals(server.hostName, capture!!.sdkHost)
+        // Before the stores are loaded an opt-out waits, and the writer discards what came in between.
+        assertTrue((analytics as DefaultAnalytics).flushBlocking(10_000))
+        analytics.optOut()
+        assertFalse(capture!!.capturesNetworkRequests)
+
+        RubiconCore.resetForTests()
+        RubiconCore.create(config(server) { autocapture.enabled -= Autocapture.NETWORK_REQUESTS }, platform(root, FakeNetworkMonitor())) {
+            capture = it
+        }
+        assertFalse(capture!!.capturesNetworkRequests)
+    }
+
+    @Test
     fun `automatic capture is attached once, to a new instance only`() {
         var attached = 0
         RubiconCore.create(config(server), platform(root, FakeNetworkMonitor())) { attached++ }
