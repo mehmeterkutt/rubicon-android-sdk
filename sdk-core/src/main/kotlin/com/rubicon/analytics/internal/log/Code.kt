@@ -74,6 +74,9 @@ public enum class Code {
     /** ERROR. A `beforeSend` hook threw; the event was dropped. */
     HOOK_THREW,
 
+    /** ERROR. A `beforeSend` hook returned what its rules do not allow; the event was dropped. */
+    HOOK_VIOLATION,
+
     // Identity
 
     /** WARN. `identify` was called with a blank user id or one longer than 255 characters. */
