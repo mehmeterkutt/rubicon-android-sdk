@@ -4,6 +4,7 @@ import com.rubicon.analytics.ContextField
 import com.rubicon.analytics.internal.context.CallTimeValues
 import com.rubicon.analytics.internal.context.ContextProvider
 import com.rubicon.analytics.internal.context.StaticValues
+import com.rubicon.analytics.internal.log.Log
 import com.rubicon.analytics.internal.platform.LifecycleSource
 import com.rubicon.analytics.internal.platform.NetworkMonitor
 import com.rubicon.analytics.internal.platform.ProcessInfo
@@ -17,6 +18,15 @@ public class FakeNetworkMonitor(
     @Volatile
     private var connected: Boolean = connected
     private val listeners = CopyOnWriteArrayList<NetworkMonitor.Listener>()
+
+    /** How many times the SDK started it. */
+    @Volatile
+    public var starts: Int = 0
+        private set
+
+    override fun start(log: Log) {
+        starts++
+    }
 
     override fun isConnected(): Boolean = connected
 

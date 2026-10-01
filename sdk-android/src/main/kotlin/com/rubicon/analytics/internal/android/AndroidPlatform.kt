@@ -10,7 +10,6 @@ import com.rubicon.analytics.internal.http.HttpTransportFactory
 import com.rubicon.analytics.internal.platform.Clock
 import com.rubicon.analytics.internal.platform.ElapsedClock
 import com.rubicon.analytics.internal.platform.LifecycleSource
-import com.rubicon.analytics.internal.platform.NetworkMonitor
 import com.rubicon.analytics.internal.platform.Platform
 import com.rubicon.analytics.internal.platform.SdkDispatchers
 import com.rubicon.analytics.internal.storage.FileEventStore
@@ -38,7 +37,7 @@ internal object AndroidPlatform {
             elapsedClock = ElapsedClock { SystemClock.elapsedRealtime() },
             random = Random.Default,
             dispatchers = SdkDispatchers.default(),
-            networkMonitor = ConnectedNetworkMonitor,
+            networkMonitor = AndroidNetworkMonitor(context),
             httpTransportFactory = HttpTransportFactory.DEFAULT,
             contextProvider = EmptyContextProvider,
             processInfo = processInfo,
@@ -56,16 +55,8 @@ internal object AndroidPlatform {
     private const val ROOT_DIR = "rubicon"
 }
 
-// Stand-ins until steps 7.2 (network monitor), 7.3 (context provider) and 7.4 (lifecycle) replace
-// them in this pull request: always connected, no context values, never in the foreground.
-
-internal object ConnectedNetworkMonitor : NetworkMonitor {
-    override fun isConnected(): Boolean = true
-
-    override fun addListener(listener: NetworkMonitor.Listener): Unit = Unit
-
-    override fun removeListener(listener: NetworkMonitor.Listener): Unit = Unit
-}
+// Stand-ins until steps 7.3 (context provider) and 7.4 (lifecycle) replace them in this pull
+// request: no context values, never in the foreground.
 
 internal object EmptyContextProvider : ContextProvider {
     override fun staticValues(disabled: Set<ContextField>): StaticValues = StaticValues.NONE

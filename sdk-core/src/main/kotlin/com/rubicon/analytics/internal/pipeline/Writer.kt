@@ -233,6 +233,7 @@ internal class Writer(
         appendedSinceFlush = platform.eventStore.pendingCount
         if (appendedSinceFlush > 0) startInterval()
         platform.lifecycleSource.addListener(lifecycleListener)
+        platform.networkMonitor.start(log)
         platform.networkMonitor.addListener(networkListener)
         if (platform.lifecycleSource.isForeground) appendSessionEvents(sessions.onForeground())
         persistStores()

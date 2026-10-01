@@ -114,4 +114,6 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
   pick API levels with `@Config(sdk = [...])` and cover both sides of every API check. It runs API 23
   to 35 here: it has no 21 or 22 (the emulator suite covers them) and 36 needs Java 21.
 - Test doubles come from `testFixtures(project(":sdk-core"))`.
+- Android lint does not see the compiler's module-wide opt-in: if it reports `UnsafeOptInUsageError`
+  for an internal class, mark the class `@RubiconInternal` (it is internal, so nothing leaks).
 - Unit tests run on the debug variant only (`testDebugUnitTest`).

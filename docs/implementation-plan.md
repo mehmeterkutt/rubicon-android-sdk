@@ -746,7 +746,7 @@ release.
 | Identity 5 | `reset` clears person data only, no event | 4.1, 6.1, 6.5 | 4.1: `PersonStoreTest.person json has exactly the decided keys`, `DeviceStoreTest.device json has exactly the decided keys`; 6.1: `IdentityTest`.`reset clears user and all super properties`; `remote config json has exactly the decided keys`; 6.5: `PrivacyTest`.`deletes events and the person, renews the device id, keeps consent, version and remote config` |
 | Identity 6 | No alias | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
 | Context 1 | Internal `ContextProvider`, `ContextStep`, nothing on the main thread | 2.1, 6.3, 7.3 |  |
-| Context 2 | Cached and signal-refreshed, captured at call time, carrier of the data SIM | 6.3a, 7.2, 7.3 | 6.3a: `EventPipelineTest`.`static context is read once, on first need` |
+| Context 2 | Cached and signal-refreshed, captured at call time, carrier of the data SIM | 6.3a, 7.2, 7.3 | 6.3a: `EventPipelineTest`.`static context is read once, on first need`; 7.2: `AndroidNetworkMonitorTest`.`losing and regaining the network tells the listeners once each` |
 | Context 3 | Twenty fields, unknown omitted (list to be revisited) | 7.3, 8.4 |  |
 | Context 4 | Everything in `context`, read-only for hooks | 3.2 | `EventModelTest.read-only for hooks` (all), `EventJavaTest.contextIsReadThroughGetters` |
 | Context 5 | `register`/`unregister`, validated at registration | 2.5, 6.1 | 2.5: `PropertyNormalizerTest.property count` (super properties dropped first); 6.1: `IdentityTest` `reset and super properties` |
@@ -796,7 +796,7 @@ release.
 | Retry 3 | `Retry-After` cap and floor, poison-batch rule | 2.3, 5.2, 6.4 | 2.3: `HttpDatesAndHashingTest.http dates` (all); 5.2: `RetryPolicyTest` `Retry-After`, `poison batch`; 6.4: `UploaderTest`.`a batch is kept on failure, retried after the wait with a new sent_at` |
 | Retry 4 | 413 as configuration problem, server answers 200 | 5.2 | `RetryPolicyTest`.`status codes` (413 is CONFIG); success bodies are never read (5.1) |
 | Retry 5 | Pipeline wait and per-segment attempts persisted, clock guard | 4.1, 5.2, 6.4 | 4.1: `DeviceStoreTest.the state and the cache read back as written` (retry object); 5.2: `RetryPolicyTest` `persistence` (restart, clock moved back by a day); 6.4: `UploaderTest`.`retry state changes are handed to the writer` |
-| Retry 6 | One default-network callback, `INTERNET` without `VALIDATED` | 7.2 |  |
+| Retry 6 | One default-network callback, `INTERNET` without `VALIDATED` | 7.2 | `AndroidNetworkMonitorTest`.`internet without validation counts as connected`, `registers one callback at start and reads the current state` |
 | Privacy 1 | `optOut` stops new events, queue still sends | 6.5, 7.6 | 6.5: `PrivacyTest` `opting out` |
 | Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3b, 6.5 | 4.1: `DeviceStoreTest.consent is null, granted or denied`; 6.3b: `WriterTest`.`the stores are loaded and written by the writer`; 6.5: `PrivacyTest` `the starting state` (stored choice wins, `persistConsent`, early `isOptedOut`, calls before load) |
 | Privacy 3 | `clearLocalData`, read-only `deviceId` | 6.5 | 6.5: `PrivacyTest` `clearing local data` |
@@ -839,7 +839,7 @@ release.
 - [x] 6.6 SDK Diagnostics
 - [x] 6.7 `DefaultAnalytics` and the core factory
 - [x] 7.1 Factory and Android platform
-- [ ] 7.2 Network monitor
+- [x] 7.2 Network monitor
 - [ ] 7.3 Context provider
 - [ ] 7.4 Lifecycle, install and update
 - [ ] 7.5 Screens and deep links
@@ -989,6 +989,8 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 7.1 | StrictMode around the factory | Robolectric does not run Android's disk access detection, so a StrictMode test there proves nothing. The JVM test checks that building the platform touches no file; the real StrictMode check moves to the emulator suite of 8.1. | Steps 7.1, 8.1 |
 | 2026-10-01 | 7.1 | Stand-ins until 7.4 | `AndroidPlatform` uses an always-connected network monitor, an empty context provider and a never-foreground lifecycle until 7.2, 7.3 and 7.4 replace them in the same pull request. | `AndroidPlatform` |
 | 2026-10-01 | 7.1 | Reaching the core from `sdk-android` tests | `RubiconCore.flushBlocking(analytics, timeout)` and `resetForTests()`, both under `@RubiconInternal`, so `DefaultAnalytics` stays `internal` (Public API 2). | `RubiconCore` |
+| 2026-10-01 | 7.2 | When the network callback is registered | `NetworkMonitor.start(log)`, called once by the writer at startup: registration is a binder call, so it stays off the main thread and out of the factory (Public API 9), and its WARN goes through the instance's log. Before `start` the monitor reports connected. | `NetworkMonitor`, `Writer` |
+| 2026-10-01 | 7.2 | Lint and the module-wide opt-in | Android lint ignores the compiler's `-opt-in` and reports `UnsafeOptInUsageError` on `AndroidNetworkMonitor`, which implements a `@RubiconInternal` interface. The class is marked `@RubiconInternal`; it is `internal`, so nothing leaks. Rule in `sdk-android/CLAUDE.md`. | `AndroidNetworkMonitor` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |
