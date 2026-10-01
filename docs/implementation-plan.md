@@ -700,14 +700,14 @@ release.
 | Decision | In short | Steps | Tests |
 |---|---|---|---|
 | Public API 1 | Developer holds one instance per process, no singleton | 6.7, 7.1 |  |
-| Public API 2 | `Analytics` interface, internal implementation, factory | 3.3, 6.7, 7.1 |  |
+| Public API 2 | `Analytics` interface, internal implementation, factory | 3.3, 6.7, 7.1 | 3.3: `AnalyticsJavaTest.javaCodeCanImplementAFake`, `NoOpAnalyticsTest` |
 | Public API 3 | `Map<String, Any?>` validated at the boundary | 2.5 | `PropertyNormalizerTest` (all) |
 | Public API 4 | `beforeSend` list fixed at creation, fail-closed; automatic events keep name and keys | 3.2, 6.3 | 3.2: `EventJavaTest.aHookIsAJavaLambdaThatCopiesOrDrops`, `ConfigValidatorTest.config snapshot` |
-| Public API 5 | Public methods return `Unit` | 3.3 |  |
+| Public API 5 | Public methods return `Unit` | 3.3 | `NoOpAnalyticsTest.every method returns Unit except the two readers` |
 | Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1, 2.1 | Build: `sdk-core` is `kotlin("jvm")`, `sdk-android` depends on it with `api`; `BuildInfoTest`, `RobolectricSetupTest`; 2.1: `TestPlatformAccessTest` |
-| Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 | 1.1: `explicitApi()` and `apiCheck` in `check` (gates); 3.1: `ConfigJavaTest` |
-| Public API 8 | Vocabulary and read-only `deviceId` | 3.3, 6.1, 6.5 |  |
-| Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3, 6.7 |  |
+| Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 | 1.1: `explicitApi()` and `apiCheck` in `check` (gates); 3.1: `ConfigJavaTest`; 3.3: `AnalyticsJavaTest.everyMethodIsCallableFromJava` |
+| Public API 8 | Vocabulary and read-only `deviceId` | 3.3, 6.1, 6.5 | 3.3: `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
+| Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3, 6.7 | 3.3: contract in the KDoc of `Analytics`; `NoOpAnalyticsTest.calls from many threads at once never throw` |
 | Event Model 1 | Top level, `properties`/`traits`, `context` ownership | 3.2, 6.3 | 3.2: `EventModelTest.golden files` (all) |
 | Event Model 2 | Sealed `TrackEvent`, `ScreenEvent`, `IdentifyEvent`; `type` on the wire | 3.2, 8.4 | 3.2: `EventModelTest.golden files` (all) |
 | Event Model 3 | Immutable normalized maps, validated twice | 2.5, 6.3 | 2.5: `PropertyNormalizerTest.deep copies` (all) |
@@ -725,7 +725,7 @@ release.
 | Identity 3 | One `identify`, set-only traits never stored | 6.1 |  |
 | Identity 4 | Different id means person reset, then identify | 6.1, 6.2 |  |
 | Identity 5 | `reset` clears person data only, no event | 4.1, 6.1 |  |
-| Identity 6 | No alias | 3.3 |  |
+| Identity 6 | No alias | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
 | Context 1 | Internal `ContextProvider`, `ContextStep`, nothing on the main thread | 2.1, 6.3, 7.3 |  |
 | Context 2 | Cached and signal-refreshed, captured at call time, carrier of the data SIM | 6.3, 7.2, 7.3 |  |
 | Context 3 | Twenty fields, unknown omitted (list to be revisited) | 7.3, 8.4 |  |
@@ -749,7 +749,7 @@ release.
 | Queue 3 | 30 events or 60 s, bounds, remote only raises | 3.1, 5.3 | 3.1: `ConfigValidatorTest.numeric bounds` (flush) |
 | Queue 4 | 100 events / 512 KB batches, oldest first, sequential | 4.2, 6.4 |  |
 | Queue 5 | 1000 events, 3 days, drop counters | 4.2, 6.6 |  |
-| Queue 6 | No public flush policy, no pause or resume | 3.3 |  |
+| Queue 6 | No public flush policy, no pause or resume | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
 | Queue 7 | `flush.immediateEvents` | 3.1, 6.3 | 3.1: `ConfigValidatorTest.config snapshot` |
 | Disk 1 | Segmented append log, one segment is one batch | 4.2 |  |
 | Disk 2a | Everything under `noBackupFilesDir/rubicon/` | 4.1, 4.2, 7.1 |  |
@@ -805,7 +805,7 @@ release.
 - [x] 2.5 Property validation and normalization
 - [x] 3.1 Configuration
 - [x] 3.2 Event model and public types
-- [ ] 3.3 The `Analytics` interface
+- [x] 3.3 The `Analytics` interface
 - [ ] 4.1 Key-value stores
 - [ ] 4.2 Event store
 - [ ] 5.1 HTTP transport
@@ -891,6 +891,8 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 3.2 | Wire names | `EventSource` `APP`/`AUTO` as `app`/`auto`; `DropReason` values as their lower-case names (`queue_full`). Golden files in `sdk-core/src/test/resources/golden`. | - |
 | 2026-10-01 | 3.2 | Java can bypass `internal` | Kotlin compiles internal constructors as public, and the sealed `Event` has a public synthetic constructor, so Java code can build an event or subclass `Event`. Step 6.3 must not trust a hook's result: it is accepted only if it is a `TrackEvent`, `ScreenEvent` or `IdentifyEvent` whose source, message id, timestamp, user id, device id and context are those of the input. What happens otherwise is to be decided in 6.3. | Step 6.3 |
 | 2026-10-01 | 3.2 | What a hook may change on an automatic event | Public API 4 said hooks run on every event. Now: on the app's events (`source = APP`) a hook may change the name, keys and values or drop the event; on automatic events (`source = AUTO`) only property values, including to `null` or another type and anything nested, with the same name and the same top-level keys and no `null` result. Context stays read-only for both. A breach drops the event (`before_send`) and throws in debug; its log code is settled in 6.3. `SDK Diagnostics` never reaches hooks. Automatic events are switched off through `autocapture.enabled`, automatic screens named with `@ScreenName`. | Public API 4, Privacy 5b (Confluence); `Event.kt`, `AnalyticsConfig.beforeSend`, root `CLAUDE.md`; steps 6.3, 8.5 |
+| 2026-10-01 | 3.3 | What the no-op instance reports | `NoOpAnalytics.isOptedOut()` is `true`, since nothing is sent (the meaning Privacy 4 gives it); `deviceId` is `""`, since there is no installation id, and an erasure request with it is plainly invalid instead of hitting a real or shared id. Asked and answered by the user. | `NoOpAnalytics` KDoc |
+| 2026-10-01 | 3.3 | Default arguments on `Analytics` | `track`, `screen` and `identify` default their map to `emptyMap()`; Kotlin compiles this into `Analytics$DefaultImpls` with synthetic `$default` helpers, which appear in the `.api` file. Java passes every argument (Public API 7). | - |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |
