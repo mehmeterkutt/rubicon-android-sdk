@@ -13,7 +13,7 @@ import java.io.InputStream
 public class FaultyFileSystem(
     private val delegate: FileSystem = FileSystem.SYSTEM,
 ) : FileSystem {
-    public enum class Operation { EXISTS, LIST, MKDIRS, LENGTH, OPEN_READ, OPEN_APPEND, OPEN_WRITE, WRITE, SYNC, RENAME, DELETE }
+    public enum class Operation { EXISTS, LIST, MKDIRS, LENGTH, OPEN_READ, OPEN_APPEND, OPEN_WRITE, WRITE, SYNC, TRUNCATE, RENAME, DELETE }
 
     private val lock = Any()
     private val once = mutableSetOf<Operation>()
@@ -74,6 +74,14 @@ public class FaultyFileSystem(
     override fun openWrite(file: File): FileSink {
         check(Operation.OPEN_WRITE)
         return FaultySink(delegate.openWrite(file))
+    }
+
+    override fun truncate(
+        file: File,
+        length: Long,
+    ) {
+        check(Operation.TRUNCATE)
+        delegate.truncate(file, length)
     }
 
     override fun rename(

@@ -7,6 +7,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.io.RandomAccessFile
 
 /**
  * The file operations the file-based stores use. It exists so that tests can inject failures;
@@ -30,6 +31,12 @@ public interface FileSystem {
 
     /** Opens [file] for writing from the start, replacing its content; only the app may read or write it. */
     public fun openWrite(file: File): FileSink
+
+    /** Cuts [file] to its first [length] bytes, to drop a half-written last line (Disk 4). */
+    public fun truncate(
+        file: File,
+        length: Long,
+    )
 
     /** Renames [from] over [to], replacing it. */
     public fun rename(
@@ -75,6 +82,13 @@ private object JavaIoFileSystem : FileSystem {
         file.setWritable(false, false)
         file.setWritable(true, true)
         file.setExecutable(false, false)
+    }
+
+    override fun truncate(
+        file: File,
+        length: Long,
+    ) {
+        RandomAccessFile(file, "rw").use { it.channel.truncate(length) }
     }
 
     override fun rename(

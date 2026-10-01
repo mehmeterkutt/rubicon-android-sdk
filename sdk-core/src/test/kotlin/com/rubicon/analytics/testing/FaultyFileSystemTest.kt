@@ -35,6 +35,7 @@ class FaultyFileSystemTest {
             Operation.OPEN_WRITE -> fs.openWrite(f).close()
             Operation.WRITE -> fs.openAppend(f).use { it.write(byteArrayOf(1)) }
             Operation.SYNC -> fs.openAppend(f).use { it.sync() }
+            Operation.TRUNCATE -> fs.truncate(f, 0)
             Operation.RENAME -> fs.rename(f, File(dir, "b"))
             Operation.DELETE -> fs.delete(f)
         }
