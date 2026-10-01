@@ -7,6 +7,7 @@ import com.rubicon.analytics.internal.log.Code
 import com.rubicon.analytics.internal.log.Log
 import com.rubicon.analytics.internal.store.DeviceStore
 import com.rubicon.analytics.internal.store.PauseKind
+import com.rubicon.analytics.internal.store.RetryState
 import com.rubicon.analytics.internal.upload.RetryPolicy.Decision
 import com.rubicon.analytics.testing.FakeClock
 import com.rubicon.analytics.testing.FakeElapsedClock
@@ -367,6 +368,17 @@ class RetryPolicyTest {
         private fun restart(): RetryPolicy {
             store.persist()
             return policy(deviceStore())
+        }
+
+        // Found by the demo app's manual checklist (step 9.3).
+        @Test
+        fun `clearing the stored retry state ends the wait in this process too`() {
+            policy.onResult("41", http(401))
+            assertTrue(policy.waitMs() > 0)
+
+            store.update { it.copy(retry = RetryState.NONE) }
+
+            assertEquals(0L, policy.waitMs())
         }
 
         @Test
