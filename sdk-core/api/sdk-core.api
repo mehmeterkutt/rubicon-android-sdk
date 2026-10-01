@@ -1,3 +1,24 @@
+public abstract interface class com/rubicon/analytics/Analytics {
+	public abstract fun clearLocalData ()V
+	public abstract fun flush ()V
+	public abstract fun getDeviceId ()Ljava/lang/String;
+	public abstract fun identify (Ljava/lang/String;Ljava/util/Map;)V
+	public abstract fun isOptedOut ()Z
+	public abstract fun optIn ()V
+	public abstract fun optOut ()V
+	public abstract fun register (Ljava/lang/String;Ljava/lang/Object;)V
+	public abstract fun reset ()V
+	public abstract fun screen (Ljava/lang/String;Ljava/util/Map;)V
+	public abstract fun track (Ljava/lang/String;Ljava/util/Map;)V
+	public abstract fun unregister (Ljava/lang/String;)V
+}
+
+public final class com/rubicon/analytics/Analytics$DefaultImpls {
+	public static synthetic fun identify$default (Lcom/rubicon/analytics/Analytics;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)V
+	public static synthetic fun screen$default (Lcom/rubicon/analytics/Analytics;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)V
+	public static synthetic fun track$default (Lcom/rubicon/analytics/Analytics;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)V
+}
+
 public final class com/rubicon/analytics/AnalyticsConfig {
 	public static final field Companion Lcom/rubicon/analytics/AnalyticsConfig$Companion;
 	public static final field DEFAULT_HOST Ljava/lang/String;
