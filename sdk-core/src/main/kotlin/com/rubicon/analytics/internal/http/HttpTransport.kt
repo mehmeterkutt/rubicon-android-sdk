@@ -27,9 +27,14 @@ public class HttpRequest(
 /** The outcome of one attempt (HTTP 4). The transport reports; the retry policy decides. */
 @RubiconInternal
 public sealed interface HttpResult {
-    /** A 2xx status. The body of a success is never used. */
+    /**
+     * A 2xx status. The body of an upload's success is never read (Retry 4); a GET carries its body,
+     * at most 64 KB, and its `ETag` for the remote configuration (Configuration 1).
+     */
     public data class Success(
         val code: Int,
+        val body: String? = null,
+        val etag: String? = null,
     ) : HttpResult
 
     /** Any other status, with at most 4 KB of the error body and `Retry-After` in milliseconds. */

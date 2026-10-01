@@ -11,6 +11,7 @@ internal object Headers {
     const val IF_NONE_MATCH = "If-None-Match"
     const val RETRY_AFTER = "Retry-After"
     const val LOCATION = "Location"
+    const val ETAG = "ETag"
 
     /** Pending backend agreement (HTTP 4): a request id the server may return, for the DEBUG line. */
     const val REQUEST_ID = "X-Request-Id"

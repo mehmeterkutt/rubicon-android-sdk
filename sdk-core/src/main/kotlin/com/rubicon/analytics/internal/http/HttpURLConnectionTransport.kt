@@ -119,7 +119,7 @@ public class HttpURLConnectionTransport internal constructor(
                     conn.disconnect()
                 }
             val sentBytes = request.body?.let { send(conn, it) } ?: 0
-            val result = receive(conn, url)
+            val result = receive(conn, url, request.method)
             val elapsed = elapsedClock.elapsedRealtimeMillis() - started
             val requestId = conn.getHeaderField(Headers.REQUEST_ID)?.let { " (request id $it)" }.orEmpty()
             log.debug { "${request.method} ${url.path}: ${describe(result)} in $elapsed ms, $sentBytes bytes sent$requestId" }
@@ -156,11 +156,16 @@ public class HttpURLConnectionTransport internal constructor(
     private fun receive(
         conn: HttpURLConnection,
         url: URL,
+        method: HttpRequest.Method,
     ): HttpResult {
         val code = conn.responseCode
         if (code < 0) throw IOException("Not a valid HTTP response")
         if (code in 200..299) {
-            // The body of a success is never used; it is drained so the connection can be reused.
+            if (method == HttpRequest.Method.GET) {
+                val body = readBody(conn.inputStream, MAX_GET_BODY)
+                return HttpResult.Success(code, body, conn.getHeaderField(Headers.ETAG))
+            }
+            // The body of an upload's success is never used; it is drained so the connection can be reused.
             drainQuietly { conn.inputStream }
             return HttpResult.Success(code)
         }
@@ -227,6 +232,7 @@ public class HttpURLConnectionTransport internal constructor(
 
     private companion object {
         const val MAX_ERROR_BODY = 4 * 1024
+        const val MAX_GET_BODY = 64 * 1024
         const val MAX_DRAIN = 64 * 1024
         val IPV4 = Regex("""\d{1,3}(\.\d{1,3}){3}""")
 
@@ -251,19 +257,29 @@ public class HttpURLConnectionTransport internal constructor(
         /** Reads up to 4 KB as text for the retry layer, drains up to 64 KB more, then closes. */
         inline fun readBodyQuietly(open: () -> InputStream?): String? =
             try {
-                open()?.use { input ->
-                    val buffer = ByteArray(MAX_ERROR_BODY)
-                    var filled = 0
-                    while (filled < buffer.size) {
-                        val read = input.read(buffer, filled, buffer.size - filled)
-                        if (read < 0) break
-                        filled += read
-                    }
-                    drain(input)
-                    decodeLeniently(buffer, filled)
-                }
+                open()?.let { readBody(it, MAX_ERROR_BODY) }
             } catch (e: IOException) {
                 null
+            }
+
+        /**
+         * Reads up to [limit] bytes as text, drains up to 64 KB more and closes. A longer body comes
+         * back cut, which its reader rejects as malformed JSON.
+         */
+        fun readBody(
+            input: InputStream,
+            limit: Int,
+        ): String =
+            input.use {
+                val buffer = ByteArray(limit)
+                var filled = 0
+                while (filled < buffer.size) {
+                    val read = it.read(buffer, filled, buffer.size - filled)
+                    if (read < 0) break
+                    filled += read
+                }
+                drain(it)
+                decodeLeniently(buffer, filled)
             }
 
         inline fun drainQuietly(open: () -> InputStream?) {
