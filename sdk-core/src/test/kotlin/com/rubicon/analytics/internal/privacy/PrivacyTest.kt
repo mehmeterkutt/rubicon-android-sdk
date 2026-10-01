@@ -1,6 +1,7 @@
 package com.rubicon.analytics.internal.privacy
 
 import com.rubicon.analytics.AnalyticsConfig
+import com.rubicon.analytics.Autocapture
 import com.rubicon.analytics.Consent
 import com.rubicon.analytics.DropReason
 import com.rubicon.analytics.LogLevel
@@ -161,7 +162,7 @@ class PrivacyTest {
 
         @Test
         fun `the open session ends without Session Ended, and no session events follow`() =
-            privacyTest { h ->
+            privacyTest({ autocapture.enabled = setOf(Autocapture.SESSIONS) }) { h ->
                 h.writer.start()
                 h.test.lifecycleSource.moveToForeground()
                 h.track("Opened")
@@ -196,7 +197,7 @@ class PrivacyTest {
 
         @Test
         fun `opting in produces no event and the next event starts a new session`() =
-            privacyTest { h ->
+            privacyTest({ autocapture.enabled = setOf(Autocapture.SESSIONS) }) { h ->
                 h.writer.start()
                 h.test.lifecycleSource.moveToForeground()
                 runCurrent()

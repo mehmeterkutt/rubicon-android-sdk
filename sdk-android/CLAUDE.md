@@ -30,6 +30,8 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
   `ScreenEvent`, `Deep Link Opened`, `Network Request`. No element interaction, no crash events.
 - `Autocapture` defaults (Lifecycle 6): `APP_LIFECYCLE`, `INSTALL_UPDATE`, `SESSIONS`,
   `SCREEN_VIEWS`, `NETWORK_REQUESTS` on; `DEEP_LINKS` off.
+- The core's `AppLifecycle` makes these events on the writer; this module only reports `ON_START`
+  and `ON_STOP` (`AndroidLifecycleSource`) and the package facts (`ProcessInfo.installedApp()`).
 - Foreground and background come from `ProcessLifecycleOwner`; the observer is added on the main
   thread (post if needed). Always call
   `AppInitializer...initializeComponent(ProcessLifecycleInitializer)` in case the app removed the
@@ -42,15 +44,19 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
 
 ## Screens and deep links
 
-- Screens (Lifecycle 3): activities only; skip a repeated resume of the same activity. Name = the
+- `ActivityCapture` sends screens and links through the core's `AutomaticCapture` (`source = AUTO`,
+  gated by `Autocapture` in the writer); it is registered only when one of the two is enabled.
+- Screens (Lifecycle 3): activities only; skip a repeated resume of the same activity while in the
+  foreground and a recreation by rotation, send again after the background. Name = the
   `@ScreenName` value, else the simple class name minus a trailing `Activity`; never titles or
   labels. One property, `name_source` (`annotation` or `class`). No Fragment or Compose automation.
   `consumer-rules.pro` keeps `@ScreenName`.
 - Deep links (Privacy 5b): scheme, host, path, the `utm_*` query parameters and the referrer package
   or host only; never other parameters or the fragment. `singleTop` links are caught with
   `addOnNewIntentListener` when the activity is a `ComponentActivity` and `androidx.activity` is
-  present (class presence check, D13); otherwise the guide advises `setIntent()`. Dedupe with a weak
-  reference to the last intent.
+  present (class presence check on `OnNewIntentProvider`, D13); otherwise the guide advises
+  `setIntent()`, read on resume. Each intent counts once (weak identity set). Properties: `scheme`,
+  `host`, `path`, the `utm_*` present, `referrer`.
 
 ## Context collection
 
@@ -61,6 +67,11 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
   callback; screen and locale by `onConfigurationChanged`; timezone read per event; app, device, OS
   and library never. Time-dependent values (network, screen, locale, timezone) are captured from the
   cache on the calling thread at call time; nothing is read at send time.
+- The cache is filled and re-read on the writer (`ContextProvider.refresh`, at startup and before each
+  message). Before the first fill and after a configuration change, call-time values are `pending`
+  and the writer fills them when it processes the event. `onConfigurationChanged` only counts.
+- Screen = the whole display (`getRealMetrics`), short side as width, so it never implies orientation.
+  `device.type`: `tv` (television UI mode or leanback), `tablet` (smallest width 600 dp), `phone`.
 - Carrier = `networkOperatorName` of the default data subscription (`getDefaultDataSubscriptionId`,
   `createForSubscriptionId`, API 24), falling back to the default `TelephonyManager`. Dual SIM must
   report the data SIM.
@@ -106,7 +117,8 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
 - Headers and bodies are never captured, by any option. Query and fragment are never sent. Path
   segments that are all digits, a UUID or hex longer than 16 characters become `:id` in `path` and
   `url` (`maskPathIds`, default `true`) (Privacy 5c). Which hosts to capture is opt-in; nothing is
-  captured for an unconfigured host.
+  captured for an unconfigured host. Hosts: an exact name or `*.domain.tld` (subdomains only).
+- `error`: `canceled`, `timeout`, `unknown_host`, `connect`, `tls`, else the simple class name.
 
 ## Tests
 
@@ -114,4 +126,8 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
   pick API levels with `@Config(sdk = [...])` and cover both sides of every API check. It runs API 23
   to 35 here: it has no 21 or 22 (the emulator suite covers them) and 36 needs Java 21.
 - Test doubles come from `testFixtures(project(":sdk-core"))`.
+- Android lint does not see the compiler's module-wide opt-in: if it reports `UnsafeOptInUsageError`
+  for an internal class, mark the class `@RubiconInternal` (it is internal, so nothing leaks).
+- Never use the real `ProcessLifecycleOwner` in Robolectric: it stays bound to the first
+  `Application` of a sandbox, so such tests depend on their order. Inject a `LifecycleRegistry`.
 - Unit tests run on the debug variant only (`testDebugUnitTest`).

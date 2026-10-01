@@ -40,9 +40,14 @@ import java.util.concurrent.atomic.AtomicReference
 public object RubiconCore {
     private val instance = AtomicReference<Analytics?>(null)
 
+    /**
+     * Creates the instance; [onCreated] runs once, for a newly created instance only (not for the
+     * no-op or a second call), so `sdk-android` can attach its automatic capture.
+     */
     public fun create(
         config: AnalyticsConfig,
         platform: Platform,
+        onCreated: (AutomaticCapture) -> Unit = {},
     ): Analytics {
         val debug = config.debug
         // Counted into DeviceStore once it exists; the log is needed to build it.
@@ -114,6 +119,11 @@ public object RubiconCore {
         if (!instance.compareAndSet(null, analytics)) return second(instance.get()!!, debug, log)
         writer.start()
         uploader.start(scope, platform.dispatchers.uploader)
+        try {
+            onCreated(analytics)
+        } catch (t: Throwable) {
+            log.error(Code.WORKER_FAILED, t) { "Automatic capture could not be attached" }
+        }
         return analytics
     }
 
@@ -128,8 +138,17 @@ public object RubiconCore {
         return existing
     }
 
-    /** Forgets the instance; for tests that create one per test. */
-    internal fun resetForTests() {
+    /**
+     * Asks [analytics] to flush and waits until nothing is pending, at most [timeoutMs]; `true` when
+     * everything was sent, `false` for the no-op instance. For tests and shutdown only (Public API 9).
+     */
+    public fun flushBlocking(
+        analytics: Analytics,
+        timeoutMs: Long,
+    ): Boolean = (analytics as? DefaultAnalytics)?.flushBlocking(timeoutMs) ?: false
+
+    /** Stops and forgets the instance; for tests that create one per test, in both modules. */
+    public fun resetForTests() {
         (instance.getAndSet(null) as? DefaultAnalytics)?.shutdown()
     }
 }

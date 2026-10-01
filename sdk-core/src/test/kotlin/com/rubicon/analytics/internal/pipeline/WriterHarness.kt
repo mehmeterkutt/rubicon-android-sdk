@@ -88,6 +88,7 @@ internal class WriterHarness(
     fun track(
         name: String = "Tapped",
         values: Map<String, Any?> = emptyMap(),
+        callTime: CallTimeValues = CallTimeValues.NONE,
     ): Boolean =
         writer.enqueue(
             CapturedEvent(
@@ -98,7 +99,7 @@ internal class WriterHarness(
                 "m-${++seq}",
                 test.clock.currentTimeMillis(),
                 identity.snapshot(),
-                CallTimeValues.NONE,
+                callTime,
             ),
         )
 
