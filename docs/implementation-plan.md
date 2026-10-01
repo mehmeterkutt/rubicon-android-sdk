@@ -471,7 +471,8 @@ never sees it, and `jvmTarget` does not restrict the Java API.
   release); the writer's first task is loading `DeviceStore` (Privacy 2); write channel of 1000 with
   `trySend` (`backpressure`), `WriteMessage` as in Queue 1; messages for events, `Flush`, identity
   and super property persistence, consent changes, `clearLocalData`; internal steps in order: context, super properties, session,
-  `beforeSend` chain (fail-closed, `before_send`), second validation, serialization with the 32 KB
+  `beforeSend` chain (fail-closed, `before_send`; automatic events keep name and top-level keys,
+  section 15, hook rules), second validation, serialization with the 32 KB
   check (`oversize`), append; time-dependent context (network, screen, locale, timezone) captured on
   the calling thread, the rest added on the worker (Context 2); `EventUpdate.Queued` after the append;
   internal `FlushTrigger` with `CountTrigger` (pending on disk including leftovers), `IntervalTrigger`
@@ -481,7 +482,10 @@ never sees it, and `jvmTarget` does not restrict the Java API.
   DEBUG line). No startup flush and no periodic timer.
 - Tests: order of calls from one thread is kept; a hook that drops, throws, renames or adds
   properties, one that returns an invalid property, and one that returns an event it built itself
-  or of a foreign subclass (section 15, step 3.2); the observer sees `Queued` for exactly the
+  or of a foreign subclass (section 15, step 3.2); on an automatic event a hook that changes values
+  (to `null`, to another type, nested values) passes, and one that renames, adds or removes a
+  top-level key or returns `null` drops it with `before_send` and throws in debug; `SDK Diagnostics`
+  never reaches a hook; the observer sees `Queued` for exactly the
   persisted events; channel full counts `backpressure` without blocking the caller; every trigger
   fires once and only when its condition holds; `flush()` includes all earlier events.
 
@@ -515,7 +519,7 @@ never sees it, and `jvmTarget` does not restrict the Java API.
 - Build: the `SDK Diagnostics` event right before a flush when a counter is non-zero and one hour has
   passed (future last time counts as now); counters reset when it is written; its own drop not
   counted; sampling by `device_id`; `logging.sendDiagnostics`; never while opted out, pending or
-  killed.
+  killed; never passed to `beforeSend` hooks.
 - Tests: silent device sends nothing; one event per hour at most across restarts; exact property
   shape against a golden file; counters reset only after the write; opted out keeps counting and
   reports after `optIn`.
@@ -644,7 +648,8 @@ never sees it, and `jvmTarget` does not restrict the Java API.
 - Build: KDoc complete on every public symbol (a Dokka build with `failOnWarning`); `README.md` as the
   integration guide: dependency, creation in `Application`, `BuildConfig.DEBUG`, on-prem `host`,
   Java example, consent and privacy checklist (disable `NETWORK_CARRIER`, `LOCALE`, `TIMEZONE` for
-  child-directed apps), interceptor setup, `eventObserver` for QA, R8 notes; `docs/issue-codes.md`
+  child-directed apps), interceptor setup, screens (an activity is tracked automatically or through
+  `screen()`, never both; `@ScreenName` to name it), `eventObserver` for QA, R8 notes; `docs/issue-codes.md`
   complete.
 
 ### 8.6 Publishing (after D2 and D8 are answered)
@@ -697,7 +702,7 @@ release.
 | Public API 1 | Developer holds one instance per process, no singleton | 6.7, 7.1 |  |
 | Public API 2 | `Analytics` interface, internal implementation, factory | 3.3, 6.7, 7.1 |  |
 | Public API 3 | `Map<String, Any?>` validated at the boundary | 2.5 | `PropertyNormalizerTest` (all) |
-| Public API 4 | `beforeSend` list fixed at creation, fail-closed | 3.2, 6.3 | 3.2: `EventJavaTest.aHookIsAJavaLambdaThatCopiesOrDrops`, `ConfigValidatorTest.config snapshot` |
+| Public API 4 | `beforeSend` list fixed at creation, fail-closed; automatic events keep name and keys | 3.2, 6.3 | 3.2: `EventJavaTest.aHookIsAJavaLambdaThatCopiesOrDrops`, `ConfigValidatorTest.config snapshot` |
 | Public API 5 | Public methods return `Unit` | 3.3 |  |
 | Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1, 2.1 | Build: `sdk-core` is `kotlin("jvm")`, `sdk-android` depends on it with `api`; `BuildInfoTest`, `RobolectricSetupTest`; 2.1: `TestPlatformAccessTest` |
 | Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 | 1.1: `explicitApi()` and `apiCheck` in `check` (gates); 3.1: `ConfigJavaTest` |
@@ -885,6 +890,7 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 3.2 | An event name that is blank or over 255 characters | No new `DropReason` and no `Dropped` update: the event is never created. Debug throws; release logs `INVALID_EVENT_NAME`, counted in `SDK Diagnostics`. | - |
 | 2026-10-01 | 3.2 | Wire names | `EventSource` `APP`/`AUTO` as `app`/`auto`; `DropReason` values as their lower-case names (`queue_full`). Golden files in `sdk-core/src/test/resources/golden`. | - |
 | 2026-10-01 | 3.2 | Java can bypass `internal` | Kotlin compiles internal constructors as public, and the sealed `Event` has a public synthetic constructor, so Java code can build an event or subclass `Event`. Step 6.3 must not trust a hook's result: it is accepted only if it is a `TrackEvent`, `ScreenEvent` or `IdentifyEvent` whose source, message id, timestamp, user id, device id and context are those of the input. What happens otherwise is to be decided in 6.3. | Step 6.3 |
+| 2026-10-01 | 3.2 | What a hook may change on an automatic event | Public API 4 said hooks run on every event. Now: on the app's events (`source = APP`) a hook may change the name, keys and values or drop the event; on automatic events (`source = AUTO`) only property values, including to `null` or another type and anything nested, with the same name and the same top-level keys and no `null` result. Context stays read-only for both. A breach drops the event (`before_send`) and throws in debug; its log code is settled in 6.3. `SDK Diagnostics` never reaches hooks. Automatic events are switched off through `autocapture.enabled`, automatic screens named with `@ScreenName`. | Public API 4, Privacy 5b (Confluence); `Event.kt`, `AnalyticsConfig.beforeSend`, root `CLAUDE.md`; steps 6.3, 8.5 |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

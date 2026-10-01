@@ -50,9 +50,10 @@ public class AnalyticsConfig(
     public var debug: Boolean by freezer.setting(false)
 
     /**
-     * Hooks that see every event, automatic ones included, in list order, before it is stored
-     * (Public API 4). Empty by default. A hook returns the event, a `copy` of it, or `null` to drop
-     * it; one that throws drops the event too. Fixed when the SDK is created.
+     * Hooks that see each event in list order before it is stored (Public API 4). Empty by default.
+     * A hook returns the event, a `copy` of it, or `null` to drop it; one that throws drops the event
+     * too. Automatic events allow only new property values; [BeforeSend] has the rules. Fixed when
+     * the SDK is created.
      *
      * ```
      * beforeSend = listOf(BeforeSend { e -> if (e is TrackEvent && e.name.startsWith("debug_")) null else e })

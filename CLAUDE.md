@@ -79,6 +79,9 @@ A pull request that breaks one does not merge.
 - `AnalyticsConfig.beforeSend: List<BeforeSend>`, fixed at creation; `fun interface` returning
   `Event?`. `null` drops, a throwing hook drops too (fail-closed, `before_send`). No runtime add or
   remove, no public plugin API; internally the pipeline is a list of `internal` steps (Public API 4).
+  `source = APP`: any name, keys and values, or `null`. `source = AUTO`: same name, same top-level
+  keys, values free (also `null` or another type), no `null` result. A breach drops (`before_send`),
+  throws in debug. `SDK Diagnostics` never reaches hooks.
 - Interfaces evolve by adding members with a default body; existing signatures never change.
 - Configuration classes are builders: required values in the constructor, everything else a mutable
   property with a default. Never add constructor parameters. Optional values are `Type? = null`,

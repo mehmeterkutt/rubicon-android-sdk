@@ -15,7 +15,7 @@ public enum class DropReason {
     /** Events were tracked faster than they could be stored. */
     BACKPRESSURE,
 
-    /** A `beforeSend` hook returned `null` or threw. */
+    /** A `beforeSend` hook returned `null`, threw, or returned an event it may not. */
     BEFORE_SEND,
 
     /** The event could not be written, for example on a full disk. */
