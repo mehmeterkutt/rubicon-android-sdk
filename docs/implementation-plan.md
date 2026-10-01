@@ -734,12 +734,12 @@ release.
 | Context 4 | Everything in `context`, read-only for hooks | 3.2 | `EventModelTest.read-only for hooks` (all), `EventJavaTest.contextIsReadThroughGetters` |
 | Context 5 | `register`/`unregister`, validated at registration | 2.5, 6.1 | 2.5: `PropertyNormalizerTest.property count` (super properties dropped first); 6.1: `IdentityTest` `reset and super properties` |
 | Context 6 | `context.disabledFields`, never read when disabled | 3.1, 7.3 | 3.1: `ConfigValidatorTest.default values` (18 values, no `LIBRARY_*`) |
-| Session 1 | SDK computes sessions, on every event | 6.2 |  |
-| Session 2 | UUIDv7 id plus `started_at` | 6.2 |  |
-| Session 3 | Foreground keeps alive, background never extends | 6.2, 7.4 |  |
-| Session 4 | 5 min timeout (10 s to 2 h), 12 h maximum, no timers | 3.1, 6.2 | 3.1: `ConfigValidatorTest.numeric bounds` (background timeout) |
-| Session 5 | `Session Started`/`Ended`, backdated with `duration_ms` | 6.2, 8.4 |  |
-| Session 6 | Persisted in `PersonStore`, resumed after restart | 4.1, 6.2 |  |
+| Session 1 | SDK computes sessions, on every event | 6.2 | `SessionManagerTest` (every event gets the session or none) |
+| Session 2 | UUIDv7 id plus `started_at` | 6.2 | `SessionManagerTest`.`the first event in the foreground starts it` (id from the generator passed in) |
+| Session 3 | Foreground keeps alive, background never extends | 6.2, 7.4 | 6.2: `SessionManagerTest` `starting a session`, `the background countdown` |
+| Session 4 | 5 min timeout (10 s to 2 h), 12 h maximum, no timers | 3.1, 6.2 | 3.1: `ConfigValidatorTest.numeric bounds` (background timeout); 6.2: `SessionManagerTest` `maximum duration`, `a clock change while backgrounded does not count` |
+| Session 5 | `Session Started`/`Ended`, backdated with `duration_ms` | 6.2, 8.4 | 6.2: `SessionManagerTest` (each of the five end triggers) |
+| Session 6 | Persisted in `PersonStore`, resumed after restart | 4.1, 6.2 | 6.2: `SessionManagerTest` `across restarts`, `last activity`, `reset and a change of user` |
 | Lifecycle 1 | Event inventory and properties | 7.4, 7.5, 7.6, 8.4 |  |
 | Lifecycle 2 | `ProcessLifecycleOwner`, `AppInitializer` | 7.4 |  |
 | Lifecycle 3 | Activity screens, `@ScreenName`, `name_source` | 7.5 |  |
@@ -814,7 +814,7 @@ release.
 - [x] 5.2 Retry policy and backoff
 - [x] 5.3 Remote configuration
 - [x] 6.1 Identity and super properties
-- [ ] 6.2 Session
+- [x] 6.2 Session
 - [ ] 6.3 Writer and pipeline
 - [ ] 6.4 Uploader
 - [ ] 6.5 Privacy
@@ -934,6 +934,11 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 6.1 | Calls before the stores are loaded (the writer loads them first, Privacy 2; the factory never reads on the main thread) | Kept in call order and applied by the writer right after loading; snapshots taken meanwhile are filled at the same point, so `identify` then `track` still carries the new id and nothing is read on the calling thread. After loading, the synchronous in-memory path. Chosen by the user. | `Identity` |
 | 2026-10-01 | 6.1 | `deviceId` before the writer has loaded `device.json` | Read once on the calling thread, like `isOptedOut()` (Public API 9), sharing one read with the writer so only one id is ever generated; a missing file's new id is written by the writer, never on the calling thread. Chosen by the user; Public API 9 lists the getter next to `isOptedOut()`. | `Identity`, `DeviceStore.readEarly`, Confluence Public API 9 |
 | 2026-10-01 | 6.1 | Hooks for the session (Session 6, step 6.2) | `Identity` calls `onPersonCleared` with the old identity before `reset()` or a user switch clears the person, so 6.2 can end the session with the old `user_id` first. | `Identity` |
+| 2026-10-01 | 6.2 | When a session starts | With the first event while the app is in the foreground: `Session Started` comes right before that event, with its timestamp as `started_at` (Session 5). Coming to the foreground alone starts nothing; in practice `Application Opened` is that first event. | `SessionManager` |
+| 2026-10-01 | 6.2 | A clock set back at process start (Session 6, rule 1 says "the session ends") | It ends like a timed-out one: `Session Ended` backdated to the saved last activity, and the saved session is removed. | `SessionManager` |
+| 2026-10-01 | 6.2 | The 30-second last activity write | Done with events in the foreground, at most every 30 s, and at once on backgrounding; no timer (Session 4). A foreground with no events at all leaves the last write as the backdated end after a crash. | `SessionManager` |
+| 2026-10-01 | 6.2 | Where the session manager runs | On the writer only; foreground, background and person-cleared signals reach it as writer messages in order with events (6.3). A process that starts with a valid saved session counts its background time from the saved last activity. The session written to `PersonStore` is only ever the one the manager owns, so a person cleared on the calling thread never gets the old session back. | `SessionManager`, step 6.3 |
+| 2026-10-01 | 6.2 | The end of a session at `reset()` or a user switch | Backdated to now when in the foreground, else to the last activity; it carries the previous person's identity. | `SessionManager` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |
