@@ -83,3 +83,27 @@ dependencies {
         "${flavor}Implementation"(libs.okhttp)
     }
 }
+
+// Step 8.2: R8 reports missing classes as errors, and writes the rules it would need to
+// missing_rules.txt; with the SDK's consumer rules there must be none, with and without OkHttp.
+val checkR8 =
+    tasks.register("checkR8") {
+        group = "verification"
+        description = "Builds the minified release variants and fails if R8 found missing classes."
+        dependsOn("assembleFullRelease", "assembleNoOkhttpRelease")
+        val mapping = layout.buildDirectory.dir("outputs/mapping")
+        doLast {
+            val missing =
+                mapping
+                    .get()
+                    .asFile
+                    .walk()
+                    .filter { it.name == "missing_rules.txt" && it.readText().isNotBlank() }
+                    .toList()
+            check(missing.isEmpty()) { "R8 found missing classes: ${missing.joinToString { it.path }}" }
+        }
+    }
+
+tasks.named("check") {
+    dependsOn(checkR8)
+}

@@ -52,6 +52,7 @@ tasks.register<Test>("emulatorTest") {
         ":test-app:assembleFullDebug",
         ":test-app:assembleFullV2Debug",
         ":test-app:assembleNoStartupDebug",
+        ":test-app:assembleFullRelease",
     )
     systemProperty("adb", adb)
     systemProperty(
