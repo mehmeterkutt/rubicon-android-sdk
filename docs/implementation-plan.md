@@ -640,7 +640,10 @@ Split from 6.3 (too big for one pull request): the transformation of one event, 
   events, restart, every accepted event arrives, and a repeat only ever carries the same
   `message_id` (at-least-once, deduplicated by the backend); real offline and online with `svc wifi` and `svc data`; real
   foreground and background with UiAutomator home press; the `:remote` process creates no files and
-  sends nothing; install and update event across an `adb install -r` of a higher version code.
+  sends nothing; install and update event across an `adb install -r` of a higher version code;
+  StrictMode `detectDiskReads` and `detectDiskWrites` with a death penalty around
+  `Analytics(context, config)` on the main thread (Robolectric cannot detect them, section 15,
+  step 7.1).
 
 ### 8.2 R8 and consumer rules
 
@@ -715,7 +718,7 @@ release.
 
 | Decision | In short | Steps | Tests |
 |---|---|---|---|
-| Public API 1 | Developer holds one instance per process, no singleton | 6.7, 7.1 | 6.7: `CoreIntegrationTest`.`a second instance returns the first in release and throws in debug` |
+| Public API 1 | Developer holds one instance per process, no singleton | 6.7, 7.1 | 6.7: `CoreIntegrationTest`.`a second instance returns the first in release and throws in debug`; 7.1: `FactoryTest` (the factory hands over to the core instance guard) |
 | Public API 2 | `Analytics` interface, internal implementation, factory | 3.3, 6.7, 7.1 | 3.3: `AnalyticsJavaTest.javaCodeCanImplementAFake`, `NoOpAnalyticsTest`; 6.7: `CoreIntegrationTest` (the factory returns `DefaultAnalytics`, or `NoOpAnalytics` for an unusable configuration) |
 | Public API 3 | `Map<String, Any?>` validated at the boundary | 2.5 | `PropertyNormalizerTest` (all) |
 | Public API 4 | `beforeSend` list fixed at creation, fail-closed; automatic events keep name and keys | 3.2, 6.3a | 3.2: `EventJavaTest.aHookIsAJavaLambdaThatCopiesOrDrops`, `ConfigValidatorTest.config snapshot`; 6.3a: `EventPipelineTest` `hooks on the app's events`, `hooks on automatic events`, `results that are not a copy`, `SDK Diagnostics` |
@@ -732,7 +735,7 @@ release.
 | Event Model 6 | Public classes, internal constructors, limited `copy` | 3.2, 6.3a | `EventModelTest` `limited copy`, `read-only for hooks`, `safe descriptions`; `EventJavaTest.copyHasJavaOverloads`; 6.3a: `EventPipelineTest` `results that are not a copy` |
 | Configuration 1 | Code plus restrict-only remote, allowlist, next launch, two immediate flags | 5.3, 6.3, 6.4 | 5.3: `RemoteConfigTest` `validation`, `the client` (200, 304, 404, failures, kill switch, network requests, restart); `docs/remote-config.md`; 6.4: `UploaderTest` `remote configuration` (once per launch, also with uploads gated), `the kill switch blocks uploads` |
 | Configuration 2 | One class, small groups, tuning internal | 3.1 | `ConfigValidatorTest.default values` (all), `ConfigJavaTest` |
-| Configuration 3 | Only `apiKey` required, factory validation, one instance, main process | 3.1, 6.7, 7.1 | 3.1: `ConfigValidatorTest` `api key`, `host url`, `numeric bounds`, `custom headers`; 6.7: `CoreIntegrationTest`.`an unusable configuration gives the no-op instance in release and throws in debug`, `a second instance returns the first` |
+| Configuration 3 | Only `apiKey` required, factory validation, one instance, main process | 3.1, 6.7, 7.1 | 3.1: `ConfigValidatorTest` `api key`, `host url`, `numeric bounds`, `custom headers`; 6.7: `CoreIntegrationTest`.`an unusable configuration gives the no-op instance in release and throws in debug`, `a second instance returns the first`; 7.1: `FactoryTest`.`another process gets the no-op instance and one INFO line`, `an unknown process name is assumed main, with a warning` |
 | Configuration 4 | Snapshot and freeze | 3.1, 6.7 | `ConfigValidatorTest` `config snapshot`, `frozen config`; 6.7: `CoreIntegrationTest`.`the configuration is frozen after creation` |
 | Configuration 5 | Public hatches, internal `Platform`, `HttpURLConnection`, OkHttp `compileOnly` | 2.1, 5.1, 7.6 | 2.1: `FakeEnvironmentTest.test platform` (all), `TestPlatformAccessTest`; 5.1: `HttpURLConnectionTransportTest`.`the production constructor takes its parts from the platform` |
 | Configuration 6 | No platform types in configuration | 3.1 | `ConfigJavaTest` (the whole configuration compiles and runs on the JVM) |
@@ -768,10 +771,10 @@ release.
 | Queue 6 | No public flush policy, no pause or resume | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
 | Queue 7 | `flush.immediateEvents` | 3.1, 6.3b | 3.1: `ConfigValidatorTest.config snapshot`; 6.3b: `WriterTest`.`an immediate event flushes after it is stored, matched exactly`, `the name that counts is the final one, after the hooks` |
 | Disk 1 | Segmented append log, one segment is one batch | 4.2 | `FileEventStoreTest` `segments`, `10 000 events are read back in order` |
-| Disk 2a | Everything under `noBackupFilesDir/rubicon/` | 4.1, 4.2, 7.1 | 4.1: `FileKeyValueStore` writes under `Platform.storageRoot`; `FileKeyValueStoreTest.files are app-private` |
+| Disk 2a | Everything under `noBackupFilesDir/rubicon/` | 4.1, 4.2, 7.1 | 4.1: `FileKeyValueStore` writes under `Platform.storageRoot`; `FileKeyValueStoreTest.files are app-private`; 7.1: `FactoryTest`.`the main process gets the real instance, with files only under no_backup` |
 | Disk 2b | Fixed-width index from the directory | 4.2 | `FileEventStoreTest.index order survives a restart and gaps` |
 | Disk 2c | One directory per key, others deleted (`api_key_changed`) | 2.3, 4.2 | 2.3: `HttpDatesAndHashingTest.sha-256` (all); 4.2: `FileEventStoreTest` `events of another API key are deleted and counted`, `a later format directory is never touched` |
-| Disk 2d | Main process only | 7.1, 8.1 |  |
+| Disk 2d | Main process only | 7.1, 8.1 | 7.1: `FactoryTest` (process name on both sides of API 28, `applicationInfo.processName` and the package fallback) |
 | Disk 3 | JSON Lines equal to the wire event, `v1` directory | 4.2, 2.4 | 2.4: `JsonTest.reading fields` (all), `JsonTest.round trip` (a line never holds a raw line break); 4.2: `FileEventStoreTest` `the batch body` (byte for byte) |
 | Disk 4 | One `write()` per event, fsync points, `.tmp` recovery | 4.2, 7.4, 8.1, 6.3b | 4.2: `FileEventStoreTest` `leftover open segment` (truncation at every byte), `failures`; 6.3b: `WriterTest`.`backgrounding flushes and syncs` |
 | Disk 5 | Corrupt lines skipped, unreadable segments retried then deleted | 4.2 | `FileEventStoreTest` `corrupt lines`, `unknown files are deleted with a warning`, `an unreadable segment is retried and deleted after three consecutive failures` |
@@ -802,7 +805,7 @@ release.
 | Privacy 5b | Deep links collect `utm_*` only | 7.5 |  |
 | Privacy 5c | Network capture without headers or bodies, masked ids | 7.6 |  |
 | Privacy 6 | No IP setting in the SDK | 3.1 | `ConfigValidatorTest.frozen config` (the 14 settings, none about IP) |
-| Logging 1 | `RubiconLogger`, instance-owned, Logcat default | 2.2, 7.1 | 2.2: `LogTest.log lines` (all), `LoggingJavaTest` |
+| Logging 1 | `RubiconLogger`, instance-owned, Logcat default | 2.2, 7.1 | 2.2: `LogTest.log lines` (all), `LoggingJavaTest`; 7.1: `FactoryTest`.`without a logger the SDK logs to Logcat with the tag Rubicon`, `a developer's logger is never replaced` |
 | Logging 2 | Levels, default `WARN`, repeat limit, no runtime setter | 2.2 | `LogTest.repeat limit` (all), `IssueCodesTest` |
 | Logging 3 | Inline gating | 2.2 | `LogTest.level gating` (all) |
 | Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3b, 6.4 | 1.1: `SourceScannerTest.println rule` (all); 2.2: `SourceScannerTest.values in log rule` (all), `LogTest.throwing logger`, `LogTest.event observer`, `LogTest.re-entrancy` (all); 3.2: `EventJavaTest.anObserverIsAJavaLambda`, `EventModelTest.safe descriptions`; 6.3b: `WriterTest` `the observer and drops`; 6.4: `UploaderTest` (`Sent` and `Dropped` updates) |
@@ -835,7 +838,7 @@ release.
 - [x] 6.5 Privacy
 - [x] 6.6 SDK Diagnostics
 - [x] 6.7 `DefaultAnalytics` and the core factory
-- [ ] 7.1 Factory and Android platform
+- [x] 7.1 Factory and Android platform
 - [ ] 7.2 Network monitor
 - [ ] 7.3 Context provider
 - [ ] 7.4 Lifecycle, install and update
@@ -981,6 +984,11 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 6.7 | Store writes under load (revises 6.3b) | The writer writes the stores when no message is waiting, and at least every 100 messages, instead of after every message: a burst of `register` calls cost one fsync each before, and the stress run showed the writer four times faster after the change (Disk 7: changes coalesce). | `Writer` |
 | 2026-10-01 | 6.7 | A batch on its way is never trimmed (found by the stress run) | `FileEventStore` protected the segment being read only while it was read; trimming could then delete a batch whose request was in flight and count it as `queue_full` although it was delivered. The protection now lasts until the segment is deleted or the next batch is read. | `FileEventStore` |
 | 2026-10-01 | 6.7 | What the stress run proves | 16 threads in tight loops outrun the writer, so most calls end as `backpressure` or `queue_full`, the bounded behaviour Queue 1 and 5 decide. The test asserts that every event either reached the server exactly once, in per-thread order, or is counted under its reason, and that `backpressure` matches the observer exactly. | `StressTest` |
+| 2026-10-01 | 7 | One pull request for phase 7 | Steps 7.1 to 7.6 are reviewed and committed one by one on `feature/android` and pushed with one pull request at the end; CI runs then. Chosen by the user; the working agreement's "one step, one pull request" does not apply to this phase. | Steps 7.1 to 7.6 |
+| 2026-10-01 | 7.1 | The storage root without touching the disk | `File(applicationInfo.dataDir, "no_backup/rubicon")`, the directory `noBackupFilesDir` returns, computed without calling it: `getNoBackupFilesDir()` creates the directory, a disk write on the main thread. The writer creates it on its first write. | `AndroidPlatform` |
+| 2026-10-01 | 7.1 | StrictMode around the factory | Robolectric does not run Android's disk access detection, so a StrictMode test there proves nothing. The JVM test checks that building the platform touches no file; the real StrictMode check moves to the emulator suite of 8.1. | Steps 7.1, 8.1 |
+| 2026-10-01 | 7.1 | Stand-ins until 7.4 | `AndroidPlatform` uses an always-connected network monitor, an empty context provider and a never-foreground lifecycle until 7.2, 7.3 and 7.4 replace them in the same pull request. | `AndroidPlatform` |
+| 2026-10-01 | 7.1 | Reaching the core from `sdk-android` tests | `RubiconCore.flushBlocking(analytics, timeout)` and `resetForTests()`, both under `@RubiconInternal`, so `DefaultAnalytics` stays `internal` (Public API 2). | `RubiconCore` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

@@ -1,0 +1,4 @@
+public final class com/rubicon/analytics/RubiconAnalytics {
+	public static final fun create (Landroid/content/Context;Lcom/rubicon/analytics/AnalyticsConfig;)Lcom/rubicon/analytics/Analytics;
+}
+
