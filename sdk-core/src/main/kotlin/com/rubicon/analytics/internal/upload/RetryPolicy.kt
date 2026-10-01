@@ -74,8 +74,14 @@ internal class RetryPolicy(
         deadline = if (remaining > 0) elapsedClock.elapsedRealtimeMillis() + remaining else 0L
     }
 
-    /** Milliseconds until the next attempt may start; 0 when it may start now. */
-    fun waitMs(): Long = (deadline - elapsedClock.elapsedRealtimeMillis()).coerceAtLeast(0L)
+    /**
+     * Milliseconds until the next attempt may start; 0 when it may start now. A wait whose stored
+     * state is gone, as after `clearLocalData()` (Privacy 3), has ended.
+     */
+    fun waitMs(): Long {
+        if (deadline > 0L && state.pausedUntil == null) deadline = 0L
+        return (deadline - elapsedClock.elapsedRealtimeMillis()).coerceAtLeast(0L)
+    }
 
     /**
      * The order in which to try [segments] (oldest first): a segment that failed [SUSPECT_AFTER] times

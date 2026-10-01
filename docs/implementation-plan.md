@@ -852,9 +852,9 @@ release.
 - [x] 8.4 Wire contract complete
 - [x] 8.5 Documentation
 - [ ] 8.6 Publishing
-- [ ] 9.1 Fake backend
-- [ ] 9.2 Demo app on the SDK
-- [ ] 9.3 Manual scenario checklist
+- [x] 9.1 Fake backend
+- [x] 9.2 Demo app on the SDK
+- [x] 9.3 Manual scenario checklist
 
 ## 15. Implementation decisions log
 
@@ -1028,6 +1028,12 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 8.3 | How the app without OkHttp is checked | `:test-app:checkNoOkhttp`, part of `check`, fails if any `com.squareup.okhttp3` module reaches the `noOkhttp` runtime classpath, so the emulator test runs without it; that test starts the app, tracks, flushes on background and finds no `NoClassDefFoundError` in Logcat, on API 21 and 36. R8 of the same variant is in `checkR8`. | `:test-app`, `EmulatorSuiteTest` |
 | 2026-10-01 | 8.4 | How the golden files are produced and compared | The lifecycle and session files are what the real writer stores for a scripted first launch, background, return after the timeout and update, with a fixed clock and the sample context; the envelope is what `FileEventStore.writeBatch` streams. Ids are random and the library version changes per release, so the test checks that they are UUIDv7 and present, and takes their values from the file; everything else is compared structurally. `Deep Link Opened` and `Network Request` get their properties in `sdk-android`: `GoldenPropertiesTest` runs the real producers against the files' `properties`, and the core test checks the rest of those events. `GoldenFilesTest` also fails when a file is added or missing. | `GoldenFilesTest`, `GoldenPropertiesTest` |
 | 2026-10-01 | 8.5 | KDoc check and the guide | Dokka 2.0.0 (a build plugin only) runs in `check` for both SDK modules with `reportUndocumented` and `failOnWarning`, public visibility only, the `internal` packages suppressed; it found 31 public symbols without KDoc (event and context properties, `toString` overrides, the hook and observer methods, `intercept`), now documented. `README.md` is the integration guide: install, creation, settings, events, identity, screens, automatic events, HTTP calls, consent and the privacy checklist, hooks, QA, R8 and start-up, Java. | `build-logic`, `README.md` |
+| 2026-10-01 | 9 | Phase 9 workflow | The demo repository's steps on one branch, `feature/sdk-integration`, committed per step, one pull request after approval, as in phase 8. Chosen by the user. | Demo repository |
+| 2026-10-01 | 9.1 | The fake backend's controls | Besides the plan's list: a `drop` mode that closes the connection without an answer, `/control/reset`, `/control/config` to read, write and delete a key's remote configuration from the app, `/requests` with the headers the SDK sets (never the key), and `/api/...` for the interceptor (`/api/status/<code>`, `/api/slow`). Remote configuration lives in `fake-server/config/<key>.json`, ignored by git. | `fake-server/server.py` |
+| 2026-10-01 | 9.2 | The demo app reaches every behaviour | The user asked for an app that tests everything, with a light blue design. Tabs Events, Identity, Capture, Server and Logs, and a Settings screen for every SDK setting, applied by restarting the process. With `debug` on, the SDK's exceptions are shown as messages instead of crashing. The SDK comes from a composite build (`rubicon.sdk.dir`, default `../../rubicon-android-sdk`). | Demo repository |
+| 2026-10-01 | 9.2 | A second name for the fake backend | The interceptor never captures the SDK's own host, so the app's own calls go to `localhost:8080` through `adb reverse tcp:8080 tcp:8080`, while the SDK sends to `10.0.2.2:8080`. | Demo repository |
+| 2026-10-01 | 9.3 | The checklist and its first run | `docs/manual-checklist.md` in the demo repository: the eleven scenarios as steps in the app, with what to expect and the last result. First run on an API 36 emulator: all passed, after the fix below. | Demo repository |
+| 2026-10-01 | 9.3 | Found: `clearLocalData()` did not end a running wait | The stored retry state was cleared (Privacy 3), but the uploader's wait lived on in memory until it ran out (up to an hour after a 401) or the app restarted. `RetryPolicy.waitMs()` now ends a wait whose stored state is gone; the two always change together otherwise. Found with the demo app's manual checklist. | `RetryPolicy` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |
