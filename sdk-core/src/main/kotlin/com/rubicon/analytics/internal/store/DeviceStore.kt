@@ -151,13 +151,36 @@ internal class DeviceStore(
     /** Counts every WARN and ERROR by code; the `Log` of the instance is built with it. */
     val issueCounter: IssueCounter = IssueCounter { code -> count(DiagnosticsCount(issues = mapOf(code.name to 1))) }
 
-    /** Reads both files; the writer's first task (Privacy 2). */
+    private val loadLock = Any()
+
+    /**
+     * Reads both files and writes a new `device.json` if it was missing; the writer's first task
+     * (Privacy 2). When [readEarly] already read them, only that write is left.
+     */
     fun load() {
-        device.load(
-            onMissing = { DeviceState.initial(newDeviceId()) },
-            onUnreadable = { DeviceState.initial(newDeviceId()) },
-        )
-        remote.load(onMissing = { null }, onUnreadable = { null })
+        read(writeMissing = true)
+        persist()
+    }
+
+    /**
+     * Reads the files on the calling thread if the writer has not yet, for the two getters that must
+     * answer at once, `deviceId` and `isOptedOut()` (Public API 9). Never writes: a new id is written
+     * by the writer's [load]. The files are read once, whoever comes first.
+     */
+    fun readEarly() {
+        if (!device.isLoaded) read(writeMissing = false)
+    }
+
+    private fun read(writeMissing: Boolean) {
+        synchronized(loadLock) {
+            if (device.isLoaded) return
+            device.load(
+                onMissing = { DeviceState.initial(newDeviceId()) },
+                onUnreadable = { DeviceState.initial(newDeviceId()) },
+                writeMissing = writeMissing,
+            )
+            remote.load(onMissing = { null }, onUnreadable = { null })
+        }
         synchronized(countLock) {
             if (!early.isEmpty) {
                 device.update {

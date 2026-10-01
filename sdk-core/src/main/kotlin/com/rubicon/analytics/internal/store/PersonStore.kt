@@ -50,6 +50,9 @@ internal class PersonStore(
         file.load(onMissing = { PersonState.ANONYMOUS }, onUnreadable = { PersonState.ANONYMOUS })
     }
 
+    val isLoaded: Boolean
+        get() = file.isLoaded
+
     val state: PersonState
         get() = checkNotNull(file.value) { "PersonStore used before load" }
 
