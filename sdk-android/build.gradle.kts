@@ -30,6 +30,8 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.mockk)
+    // OnNewIntentProvider for the singleTop deep link test; the app provides it at runtime (D13).
+    testImplementation(libs.androidx.core)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation("com.squareup.okhttp3:okhttp:$okhttpTestVersion")
     testImplementation("com.squareup.okhttp3:mockwebserver:$okhttpTestVersion")

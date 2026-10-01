@@ -1,6 +1,7 @@
 package com.rubicon.analytics.internal
 
 import com.rubicon.analytics.Analytics
+import com.rubicon.analytics.Autocapture
 import com.rubicon.analytics.EventSource
 import com.rubicon.analytics.internal.config.ConfigSnapshot
 import com.rubicon.analytics.internal.identity.Identity
@@ -37,7 +38,8 @@ internal class DefaultAnalytics(
     private val writer: Writer,
     private val newId: () -> String,
     private val scope: CoroutineScope,
-) : Analytics {
+) : Analytics,
+    AutomaticCapture {
     override fun track(
         name: String,
         properties: Map<String, Any?>,
@@ -136,29 +138,55 @@ internal class DefaultAnalytics(
     private val creating: Boolean
         get() = flags.collecting && consent.state != ConsentState.DENIED
 
+    override fun track(
+        gate: Autocapture,
+        name: String,
+        properties: Map<String, Any?>,
+    ): Unit = automatic { capture(CapturedEvent.Type.TRACK, name, properties, EventSource.AUTO, gate, strict = false) }
+
+    override fun screen(
+        gate: Autocapture,
+        name: String,
+        properties: Map<String, Any?>,
+    ): Unit = automatic { capture(CapturedEvent.Type.SCREEN, name, properties, EventSource.AUTO, gate, strict = false) }
+
+    // Called from the SDK's own callbacks, where a throw would reach the app: a bad name, such as an
+    // invalid @ScreenName value, is a WARN even in debug.
+    private inline fun automatic(block: () -> Unit) {
+        try {
+            block()
+        } catch (t: Throwable) {
+            failed(t)
+        }
+    }
+
     private fun capture(
         type: CapturedEvent.Type,
         name: String,
         properties: Map<String, Any?>,
+        source: EventSource = EventSource.APP,
+        gate: Autocapture? = null,
+        strict: Boolean = code.debug,
     ) {
         PropertyNormalizer.checkName(name)?.let {
-            if (code.debug) throw IllegalArgumentException(it.message)
+            if (strict) throw IllegalArgumentException(it.message)
             log.warn(Code.INVALID_EVENT_NAME) { it.message }
             return
         }
         if (!creating) return
         val normalized = PropertyNormalizer.normalize(properties)
-        PropertyProblem.report(normalized.problems, code.debug, log)
+        PropertyProblem.report(normalized.problems, strict, log)
         writer.enqueue(
             CapturedEvent(
                 type,
                 name,
                 normalized.values,
-                EventSource.APP,
+                source,
                 newId(),
                 platform.clock.currentTimeMillis(),
                 identity.snapshot(),
                 platform.contextProvider.callTimeValues(code.disabledFields),
+                gate = gate,
             ),
         )
     }

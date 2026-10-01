@@ -761,10 +761,10 @@ release.
 | Session 6 | Persisted in `PersonStore`, resumed after restart | 4.1, 6.2 | 6.2: `SessionManagerTest` `across restarts`, `last activity`, `reset and a change of user` |
 | Lifecycle 1 | Event inventory and properties | 7.4, 7.5, 7.6, 8.4 | 7.4: `WriterTest` `app lifecycle events`, `AppLifecycleTest` `open and background` |
 | Lifecycle 2 | `ProcessLifecycleOwner`, `AppInitializer` | 7.4, 8.1 | 7.4: `AndroidLifecycleSourceTest` (all); 8.1: real owner without the Startup provider |
-| Lifecycle 3 | Activity screens, `@ScreenName`, `name_source` | 7.5 |  |
+| Lifecycle 3 | Activity screens, `@ScreenName`, `name_source` | 7.5 | `ActivityCaptureTest`.`the name is the class without Activity, or the annotation, with its source`, `the same activity resumed again in the foreground is not sent again`, `rotation is not a new screen`, `returning from the background shows the screen again` |
 | Lifecycle 4 | Install and update detection | 7.4, 8.1 | 7.4: `AppLifecycleTest` `install and update`, `AndroidLifecycleSourceTest`.`install facts come from the package` |
 | Lifecycle 5 | Plain names, `source` `app`/`auto` | 3.2, 7.4 | 3.2: `EventModelTest.wire names`; 7.4: `WriterTest`.`foreground and background produce the decided events, automatic and inside the session` |
-| Lifecycle 6 | `Autocapture` set and defaults, `NETWORK_REQUESTS` off at once | 3.1, 5.3, 7.4, 7.6 | 3.1: `ConfigValidatorTest.default values`; 7.4: `WriterTest`.`each type follows its gate` |
+| Lifecycle 6 | `Autocapture` set and defaults, `NETWORK_REQUESTS` off at once | 3.1, 5.3, 7.4, 7.6 | 3.1: `ConfigValidatorTest.default values`; 7.4: `WriterTest`.`each type follows its gate`; 7.5: `ActivityCaptureTest`.`deep links are off by default, screens on`, `CoreIntegrationTest`.`automatic events are sent with source auto, only while their type is enabled` |
 | Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3b, 6.4, 6.7 | 6.3b: `WriterTest` (single writer, channel of 1000, backpressure, conflated upload signal); 6.4: `UploaderTest`.`no two requests overlap under a burst of signals`; 6.7: `StressTest` (backpressure counted exactly under load) |
 | Queue 2 | Flush triggers and suppression, no WorkManager | 6.3b, 6.4, 7.4 | 6.3b: `WriterTest` `flush triggers`; 6.4: `UploaderTest` `gates`; 7.4: `WriterTest`.`foreground and background produce the decided events, automatic and inside the session` (Backgrounded in the background flush) |
 | Queue 3 | 30 events or 60 s, bounds, remote only raises | 3.1, 5.3 | 3.1: `ConfigValidatorTest.numeric bounds` (flush); 5.3: `RemoteConfigTest`.`flushing can only become less frequent` |
@@ -804,7 +804,7 @@ release.
 | Privacy 3 | `clearLocalData`, read-only `deviceId` | 6.5 | 6.5: `PrivacyTest` `clearing local data` |
 | Privacy 4 | `Consent` `GRANTED`/`PENDING` | 3.1, 6.5 | 3.1: `ConfigValidatorTest.default values`; 6.5: `PrivacyTest` `pending consent`, `PENDING is opted out, meaning nothing is sent now` |
 | Privacy 5a | No field presets, checklist in the guide | 8.5 |  |
-| Privacy 5b | Deep links collect `utm_*` only | 7.5 |  |
+| Privacy 5b | Deep links collect `utm_*` only | 7.5 | `ActivityCaptureTest`.`a deep link sends scheme, host, path, utm parameters and the referrer only`, `a singleTop activity's new intent is captured once`, `a restored or rotated activity does not send its link again` |
 | Privacy 5c | Network capture without headers or bodies, masked ids | 7.6 |  |
 | Privacy 6 | No IP setting in the SDK | 3.1 | `ConfigValidatorTest.frozen config` (the 14 settings, none about IP) |
 | Logging 1 | `RubiconLogger`, instance-owned, Logcat default | 2.2, 7.1 | 2.2: `LogTest.log lines` (all), `LoggingJavaTest`; 7.1: `FactoryTest`.`without a logger the SDK logs to Logcat with the tag Rubicon`, `a developer's logger is never replaced` |
@@ -844,10 +844,10 @@ release.
 - [x] 7.2 Network monitor
 - [x] 7.3 Context provider
 - [x] 7.4 Lifecycle, install and update
-- [ ] 7.5 Screens and deep links
-- [ ] 7.6 HTTP call capture
+- [x] 7.5 Screens and deep links
+- [ ] 7.6` HTTP call capture
 - [ ] 8.1 Test app and instrumented suite
-- [ ] 8.2 R8 and consumer rules
+- [ ] 8.2 R8 and consumer rules`
 - [ ] 8.3 App without OkHttp
 - [ ] 8.4 Wire contract complete
 - [ ] 8.5 Documentation
@@ -1004,6 +1004,12 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 7.4 | `LIFECYCLE_UNAVAILABLE` | A new WARN code for a failure to observe `ProcessLifecycleOwner`: the SDK then never sees a foreground, so no lifecycle events, sessions or background flush. Added to `docs/issue-codes.md`. | `AndroidLifecycleSource` |
 | 2026-10-01 | 7.4 | The Startup provider test moves to the emulator | Robolectric runs androidx Startup's provider and keeps `ProcessLifecycleOwner` bound to the first `Application` of a sandbox, so a JVM test with the real owner depends on test order. The JVM tests inject the owner and check that `AppInitializer` runs before the observer is added; the real owner, with the provider removed, is tested in 8.1. | Steps 7.4, 8.1 |
 | 2026-10-01 | 7.4 | `LifecycleSource.start(log)` | Like the network monitor: the writer starts it at startup, so registration is posted to the main thread from there and its WARN uses the instance's log. | `LifecycleSource`, `Writer` |
+| 2026-10-01 | 7.5 | How `sdk-android` sends automatic events | An internal `AutomaticCapture` (`track`/`screen` with an `Autocapture` gate) implemented by `DefaultAnalytics` and handed to the factory through `RubiconCore.create(..., onCreated)`, only for a new instance. Events get `source = AUTO`, are created only while collecting, and the writer drops them uncounted unless the gate is in the effective set, so a remote switch-off applies from the next launch. A bad name is a WARN even in debug, since a throw would reach the app from an activity callback. 7.6 uses the same path. | `AutomaticCapture`, `DefaultAnalytics`, `Writer` |
+| 2026-10-01 | 7.5 | Rotation is not a new screen | An activity recreated by a configuration change (`isChangingConfigurations`) counts as the same activity. Chosen by the user. | `ActivityCapture` |
+| 2026-10-01 | 7.5 | Returning from the background shows the screen again | The repeated-resume rule applies while the app stays in the foreground (a dialog, a permission prompt); after all activities stopped, the next resume is a new screen view. Chosen by the user. | `ActivityCapture` |
+| 2026-10-01 | 7.5 | `Deep Link Opened` properties | `scheme`, `host`, `path` (decoded, as sent), the `utm_*` parameters present, `referrer` (package or host); unknown or empty values left out; no combined `url`. Only `VIEW` intents with data. Chosen by the user. | `DeepLink` |
+| 2026-10-01 | 7.5 | New intents and `setIntent()` | The class presence check is on `androidx.core.app.OnNewIntentProvider`, the interface that declares `addOnNewIntentListener` and that `ComponentActivity` implements from androidx.activity 1.7: an app on an older androidx.activity has `ComponentActivity` without the method. For other activities the intent is also read on resume, so the `setIntent()` advice of D13 works. Since the intent is read at more than one moment, the weak reference of Lifecycle 6 became a weak identity set of seen intents: going back to an earlier activity does not repeat its link. The referrer of a new intent comes from its own extras first. | `ActivityCapture`, `NewIntents` |
+| 2026-10-01 | 7.5 | Test dependency `androidx.core` 1.8.0 | The `singleTop` test needs `OnNewIntentProvider`. androidx.activity 1.7 at test runtime would raise lifecycle to 2.6 and test against a newer lifecycle than the 2.4.0 the SDK ships with; androidx.core 1.8.0, the version activity 1.7 itself uses, keeps 2.4.0. A test activity implements the interface as `ComponentActivity` does. | `sdk-android` tests |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

@@ -44,15 +44,19 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
 
 ## Screens and deep links
 
-- Screens (Lifecycle 3): activities only; skip a repeated resume of the same activity. Name = the
+- `ActivityCapture` sends screens and links through the core's `AutomaticCapture` (`source = AUTO`,
+  gated by `Autocapture` in the writer); it is registered only when one of the two is enabled.
+- Screens (Lifecycle 3): activities only; skip a repeated resume of the same activity while in the
+  foreground and a recreation by rotation, send again after the background. Name = the
   `@ScreenName` value, else the simple class name minus a trailing `Activity`; never titles or
   labels. One property, `name_source` (`annotation` or `class`). No Fragment or Compose automation.
   `consumer-rules.pro` keeps `@ScreenName`.
 - Deep links (Privacy 5b): scheme, host, path, the `utm_*` query parameters and the referrer package
   or host only; never other parameters or the fragment. `singleTop` links are caught with
   `addOnNewIntentListener` when the activity is a `ComponentActivity` and `androidx.activity` is
-  present (class presence check, D13); otherwise the guide advises `setIntent()`. Dedupe with a weak
-  reference to the last intent.
+  present (class presence check on `OnNewIntentProvider`, D13); otherwise the guide advises
+  `setIntent()`, read on resume. Each intent counts once (weak identity set). Properties: `scheme`,
+  `host`, `path`, the `utm_*` present, `referrer`.
 
 ## Context collection
 

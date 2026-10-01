@@ -34,6 +34,8 @@ junit4 = "4.13.2"
 mockk = "1.14.5"
 robolectric = "4.16"
 androidx-test-core = "1.7.0"
+# Tests only: OnNewIntentProvider, the interface androidx.activity 1.7 uses (D13).
+androidx-core = "1.8.0"
 kotlinx-serialization-json = "1.9.0"
 
 [libraries]
@@ -54,6 +56,7 @@ junit4 = { module = "junit:junit", version.ref = "junit4" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 androidx-test-core = { module = "androidx.test:core", version.ref = "androidx-test-core" }
+androidx-core = { module = "androidx.core:core", version.ref = "androidx-core" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization-json" }
 
 # Gradle plugins used by build-logic.

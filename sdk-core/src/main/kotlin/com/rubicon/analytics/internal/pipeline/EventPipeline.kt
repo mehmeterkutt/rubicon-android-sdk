@@ -1,6 +1,7 @@
 package com.rubicon.analytics.internal.pipeline
 
 import com.rubicon.analytics.AppContext
+import com.rubicon.analytics.Autocapture
 import com.rubicon.analytics.BeforeSend
 import com.rubicon.analytics.ContextField
 import com.rubicon.analytics.DeviceContext
@@ -53,6 +54,8 @@ internal class CapturedEvent(
      * are loaded (plan section 15, step 6.1); the writer reads it in call order.
      */
     val ticket: IdentifyTicket? = null,
+    /** For an event `sdk-android` captured itself: written only while this type is effective. */
+    val gate: Autocapture? = null,
 ) {
     enum class Type { TRACK, SCREEN, IDENTIFY }
 

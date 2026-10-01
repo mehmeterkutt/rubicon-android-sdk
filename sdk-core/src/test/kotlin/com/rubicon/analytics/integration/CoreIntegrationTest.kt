@@ -2,10 +2,12 @@ package com.rubicon.analytics.integration
 
 import com.rubicon.analytics.Analytics
 import com.rubicon.analytics.AnalyticsConfig
+import com.rubicon.analytics.Autocapture
 import com.rubicon.analytics.LogLevel
 import com.rubicon.analytics.integration.IntegrationSupport.config
 import com.rubicon.analytics.integration.IntegrationSupport.events
 import com.rubicon.analytics.integration.IntegrationSupport.platform
+import com.rubicon.analytics.internal.AutomaticCapture
 import com.rubicon.analytics.internal.DefaultAnalytics
 import com.rubicon.analytics.internal.NoOpAnalytics
 import com.rubicon.analytics.internal.RubiconCore
@@ -74,6 +76,46 @@ class CoreIntegrationTest {
         assertEquals(listOf("identify", "Signed Up", "screen"), names(request))
         assertTrue(events(request).all { it["user_id"]!!.jsonPrimitive.content == "user-42" })
         assertEquals(analytics.deviceId, events(request).first()["device_id"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `automatic events are sent with source auto, only while their type is enabled`() {
+        backend.enqueue(MockResponse())
+        var capture: AutomaticCapture? = null
+        val analytics =
+            RubiconCore.create(config(server), platform(root, FakeNetworkMonitor())) { capture = it } as DefaultAnalytics
+
+        capture!!.screen(Autocapture.SCREEN_VIEWS, "Checkout", mapOf("name_source" to "class"))
+        // DEEP_LINKS is off by default (Lifecycle 6).
+        capture!!.track(Autocapture.DEEP_LINKS, "Deep Link Opened", mapOf("scheme" to "https"))
+
+        assertTrue(analytics.flushBlocking(10_000))
+        val events = events(backend.nextUpload())
+        assertEquals(listOf("screen"), events.map { it["type"]!!.jsonPrimitive.content })
+        assertEquals("Checkout", events.single()["name"]!!.jsonPrimitive.content)
+        assertEquals("auto", events.single()["source"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `a bad automatic name only warns, even in debug`() {
+        val logger = RecordingLogger()
+        var capture: AutomaticCapture? = null
+        RubiconCore.create(config(server) { debug = true }, platform(root, FakeNetworkMonitor(), logger = logger)) { capture = it }
+
+        capture!!.screen(Autocapture.SCREEN_VIEWS, "", emptyMap())
+
+        assertTrue(logger.lines.any { it.level == LogLevel.WARN && it.message.startsWith("INVALID_EVENT_NAME") })
+    }
+
+    @Test
+    fun `automatic capture is attached once, to a new instance only`() {
+        var attached = 0
+        RubiconCore.create(config(server), platform(root, FakeNetworkMonitor())) { attached++ }
+        RubiconCore.create(config(server), platform(root, FakeNetworkMonitor())) { attached++ }
+        RubiconCore.resetForTests()
+        RubiconCore.create(config(server) { host = "not a host" }, platform(root, FakeNetworkMonitor())) { attached++ }
+
+        assertEquals(1, attached)
     }
 
     @Test

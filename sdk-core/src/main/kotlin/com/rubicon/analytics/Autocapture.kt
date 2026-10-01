@@ -29,7 +29,9 @@ public enum class Autocapture {
     /**
      * `Deep Link Opened`, off by default. It sends the scheme, host, path, the five `utm_*`
      * parameters and the referrer's package or host. Mask tokens in the path by giving that property
-     * a new value in `beforeSend`.
+     * a new value in `beforeSend`. A link sent to a running `singleTop` activity is captured when the
+     * activity is a `ComponentActivity` (androidx.activity 1.7 or later); in other activities, call
+     * `setIntent(intent)` in `onNewIntent`.
      */
     DEEP_LINKS,
 

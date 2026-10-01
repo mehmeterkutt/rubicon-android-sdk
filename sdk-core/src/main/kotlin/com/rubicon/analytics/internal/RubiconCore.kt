@@ -40,9 +40,14 @@ import java.util.concurrent.atomic.AtomicReference
 public object RubiconCore {
     private val instance = AtomicReference<Analytics?>(null)
 
+    /**
+     * Creates the instance; [onCreated] runs once, for a newly created instance only (not for the
+     * no-op or a second call), so `sdk-android` can attach its automatic capture.
+     */
     public fun create(
         config: AnalyticsConfig,
         platform: Platform,
+        onCreated: (AutomaticCapture) -> Unit = {},
     ): Analytics {
         val debug = config.debug
         // Counted into DeviceStore once it exists; the log is needed to build it.
@@ -114,6 +119,11 @@ public object RubiconCore {
         if (!instance.compareAndSet(null, analytics)) return second(instance.get()!!, debug, log)
         writer.start()
         uploader.start(scope, platform.dispatchers.uploader)
+        try {
+            onCreated(analytics)
+        } catch (t: Throwable) {
+            log.error(Code.WORKER_FAILED, t) { "Automatic capture could not be attached" }
+        }
         return analytics
     }
 

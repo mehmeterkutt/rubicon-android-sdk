@@ -251,7 +251,12 @@ internal class Writer(
         when (message) {
             // Nothing new while opted out; events that waited for the stored choice are discarded
             // unwritten and uncounted (Privacy 1, 2).
-            is WriteMessage.Enqueue -> if (collecting) resolve(message.event)?.let { append(pipeline.process(it), it.skipsHooks) }
+            is WriteMessage.Enqueue ->
+                if (collecting &&
+                    isEffective(message.event)
+                ) {
+                    resolve(message.event)?.let { append(pipeline.process(it), it.skipsHooks) }
+                }
             WriteMessage.Flush -> flushNow("requested")
             WriteMessage.Persist -> Unit
             WriteMessage.Foreground -> onForeground()
@@ -268,6 +273,9 @@ internal class Writer(
             WriteMessage.ClearLocalData -> clearEvents()
         }
     }
+
+    // A type switched off by remote configuration produces nothing; not a loss, so not counted.
+    private fun isEffective(event: CapturedEvent): Boolean = event.gate == null || event.gate in snapshot.autocapture
 
     private fun onForeground() {
         appendSessionEvents(sessions.onForeground())

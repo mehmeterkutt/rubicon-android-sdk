@@ -5,6 +5,7 @@ package com.rubicon.analytics
 import android.content.Context
 import com.rubicon.analytics.internal.NoOpAnalytics
 import com.rubicon.analytics.internal.RubiconCore
+import com.rubicon.analytics.internal.android.ActivityCapture
 import com.rubicon.analytics.internal.android.AndroidPlatform
 import com.rubicon.analytics.internal.android.AndroidProcessInfo
 import com.rubicon.analytics.internal.android.LogcatLogger
@@ -51,7 +52,9 @@ public fun Analytics(
             factoryLog(config).warn(Code.PROCESS_NAME_UNKNOWN) { "The process name could not be determined; the main process is assumed" }
         true -> Unit
     }
-    return RubiconCore.create(config, AndroidPlatform.create(app, processInfo))
+    return RubiconCore.create(config, AndroidPlatform.create(app, processInfo)) { capture ->
+        ActivityCapture.attach(app, config.autocapture.enabled, capture)
+    }
 }
 
 // The core builds the instance's log; this one only reports what the factory decides before that.
