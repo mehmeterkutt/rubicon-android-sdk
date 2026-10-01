@@ -466,6 +466,26 @@ class FileEventStoreTest {
     }
 
     @Nested
+    inner class `clearing` {
+        @Test
+        fun `deletes closed and open segments without counting, and indexes keep growing`() {
+            val store = store()
+            repeat(150) { store.append(line("e$it")) }
+
+            store.clear()
+
+            assertEquals(emptyList<String>(), files())
+            assertEquals(0, store.pendingCount)
+            assertEquals(emptyList<Long>(), store.closedSegments())
+            assertTrue(dropped.isEmpty())
+            store.append(line("after"))
+            store.closeOpenSegment()
+            assertEquals(listOf(2L), store.closedSegments())
+            assertEquals(listOf("after"), store.ids(2))
+        }
+    }
+
+    @Nested
     inner class `failures` {
         @Test
         fun `a failed write counts storage_error, logs an error and the next event goes to a new segment`() {

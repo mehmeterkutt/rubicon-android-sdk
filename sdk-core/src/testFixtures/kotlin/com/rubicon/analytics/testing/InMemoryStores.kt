@@ -104,6 +104,15 @@ public class InMemoryEventStore(
         return BatchResult.Written(ids)
     }
 
+    override fun clear() {
+        synchronized(lock) {
+            closed.clear()
+            open.clear()
+            openBytes = 0
+            unreadable.clear()
+        }
+    }
+
     override fun deleteSegment(index: Long) {
         synchronized(lock) {
             closed.remove(index)
