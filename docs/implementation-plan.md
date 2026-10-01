@@ -718,7 +718,7 @@ release.
 | Configuration 2 | One class, small groups, tuning internal | 3.1 | `ConfigValidatorTest.default values` (all), `ConfigJavaTest` |
 | Configuration 3 | Only `apiKey` required, factory validation, one instance, main process | 3.1, 6.7, 7.1 | 3.1: `ConfigValidatorTest` `api key`, `host url`, `numeric bounds`, `custom headers` |
 | Configuration 4 | Snapshot and freeze | 3.1 | `ConfigValidatorTest` `config snapshot`, `frozen config` |
-| Configuration 5 | Public hatches, internal `Platform`, `HttpURLConnection`, OkHttp `compileOnly` | 2.1, 5.1, 7.6 | 2.1: `FakeEnvironmentTest.test platform` (all), `TestPlatformAccessTest` |
+| Configuration 5 | Public hatches, internal `Platform`, `HttpURLConnection`, OkHttp `compileOnly` | 2.1, 5.1, 7.6 | 2.1: `FakeEnvironmentTest.test platform` (all), `TestPlatformAccessTest`; 5.1: `HttpURLConnectionTransportTest`.`the production constructor takes its parts from the platform` |
 | Configuration 6 | No platform types in configuration | 3.1 | `ConfigJavaTest` (the whole configuration compiles and runs on the JVM) |
 | Identity 1 | `deviceId` and `userId` in files outside backup | 4.1, 6.1, 7.1 | 4.1: `DeviceStoreTest` `missing and unreadable`, `files left byte-identical`; `PersonStoreTest` likewise |
 | Identity 2 | Implicit merge: both ids on every event | 3.2, 6.1 | 3.2: `EventModelTest.golden files.an anonymous user is sent as a null user id` |
@@ -766,12 +766,12 @@ release.
 | Serialization 3 | Size limits | 2.5, 6.3 | 2.5: `PropertyNormalizerTest` `property keys`, `string values`, `nesting depth`, `property count`, `event names` |
 | Serialization 4 | snake_case, epoch ms, own ISO formatter | 2.3, 3.2 | 2.3: `IsoDatesTest` (all); 3.2: `EventModelTest.golden files` |
 | Serialization 5 | Streamed body, golden files, independent parser | 2.4, 3.2, 6.4, 8.4 | 2.4: `JsonTest.round trip` (independent parser), `JsonOnAndroidTest` (Android's `org.json`); 3.2: golden `track.json`, `screen.json`, `identify.json` |
-| HTTP 1 | `HttpURLConnection` behind `HttpTransport` | 5.1 |  |
-| HTTP 2 | Always gzip, `Content-Length` | 5.1 |  |
-| HTTP 3 | 15 s / 20 s / 45 s watchdog | 5.1 |  |
-| HTTP 4 | Sealed `HttpResult`, never throws | 5.1 |  |
-| HTTP 5 | Bearer key, User-Agent, no redirects | 5.1 |  |
-| HTTP 6 | No transport extras, blocked-host check | 5.1 |  |
+| HTTP 1 | `HttpURLConnection` behind `HttpTransport` | 5.1 | `HttpURLConnectionTransportTest` (all, against MockWebServer) |
+| HTTP 2 | Always gzip, `Content-Length` | 5.1 | `HttpURLConnectionTransportTest` `posts the gzipped body with a fixed length`, `a failed compression sends the body uncompressed` |
+| HTTP 3 | 15 s / 20 s / 45 s watchdog | 5.1 | `HttpURLConnectionTransportTest` `slow headers trip the read timeout`, `a server that never answers trips the watchdog` |
+| HTTP 4 | Sealed `HttpResult`, never throws | 5.1 | `HttpURLConnectionTransportTest` `responses`, `Retry-After`, `failures` (each `FailureKind`) |
+| HTTP 5 | Bearer key, User-Agent, no redirects | 5.1 | `HttpURLConnectionTransportTest` `custom headers never replace the SDK's own`, `a redirect is not followed` |
+| HTTP 6 | No transport extras, blocked-host check | 5.1 | `HttpURLConnectionTransportTest` `BLOCKED, logged once`, `localhost and IP hosts are never checked`, `bodies are never logged` |
 | Retry 1 | Five groups, only a bad batch deleted | 5.2 |  |
 | Retry 2 | Backoff table with jitter, 1 h for configuration problems | 5.2 |  |
 | Retry 3 | `Retry-After` cap and floor, poison-batch rule | 2.3, 5.2, 6.4 | 2.3: `HttpDatesAndHashingTest.http dates` (all) |
@@ -808,7 +808,7 @@ release.
 - [x] 3.3 The `Analytics` interface
 - [x] 4.1 Key-value stores
 - [x] 4.2 Event store
-- [ ] 5.1 HTTP transport
+- [x] 5.1 HTTP transport
 - [ ] 5.2 Retry policy and backoff
 - [ ] 5.3 Remote configuration
 - [ ] 6.1 Identity and super properties
@@ -907,6 +907,14 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 4.2 | "Older than 3 days" | Strictly older: an event exactly 3 days old is kept, one millisecond older is expired. A timestamp in the future is never expired. | `FileEventStore` |
 | 2026-10-01 | 4.2 | When skipped lines are counted | A segment is read again on every retry, so corrupt and expired lines skipped by its last read are counted once, when the segment is deleted; corrupt lines are logged on the first read of a segment in a process. An unreadable segment counts one `UNREADABLE_SEGMENT` issue and no dropped events (Disk 5). | `FileEventStore` |
 | 2026-10-01 | 4.2 | A failed write | The lines before it stay as a closed segment (the file is cut back to them), the event counts `storage_error`, and the next event opens a new segment; a segment that cannot be closed stays `.tmp` and is recovered by the next process. | `FileEventStore` |
+| 2026-10-01 | 5.1 | How the transport gets the instance's key, headers and log (2.1 allowed refining `HttpTransport` here) | `Platform.httpTransportFactory` replaces `Platform.httpTransport`: a `fun interface` that the core factory calls with `TransportSettings` (API key, validated `network.headers`, the instance's `Log`) once validation is done. `sdk-android` passes `HttpTransportFactory.DEFAULT`, tests return a fake. The reserved header check moved to `internal/http/Headers`, shared by validation and the transport. | `Platform`, `TestPlatform` |
+| 2026-10-01 | 5.1 | The request id header (HTTP 4 leaves its name to the backend) | `X-Request-Id` until the backend names it; read only for the DEBUG line. | `Headers.REQUEST_ID`, backend review |
+| 2026-10-01 | 5.1 | 304 | Not a redirect: the configuration request expects it with `If-None-Match` (5.3), so it is returned as `HttpError(304)` without the redirect ERROR. Uploads never send `If-None-Match`. | - |
+| 2026-10-01 | 5.1 | Draining bodies | A success body and the rest of an error body are drained up to 64 KB and the stream closed; a longer body only costs connection reuse. A body that fails after the status arrived does not change the result. | - |
+| 2026-10-01 | 5.1 | `Retry-After` edge cases | Whole seconds only (`1.5` and `-5` are invalid and count as absent); a number too large for milliseconds becomes `Long.MAX_VALUE`; a date in the past gives a negative value. The cap and the one-second floor are the retry layer's (Retry 3). | - |
+| 2026-10-01 | 5.1 | When a host counts as blocked | Every address it resolves to is loopback or any-local; one public address means it is not blocked. | - |
+| 2026-10-01 | 5.1 | JDK and Android differences in tests | On the JDK an empty error body gives no error stream (`null`), and a 401 to a streamed request withholds its body; tests accept `null` there. Android returns the body. | - |
+| 2026-10-01 | 5.1 | Test-only dependency | `okhttp-tls` 4.12 for the held certificate of the TLS test. | `gradle/libs.versions.toml` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

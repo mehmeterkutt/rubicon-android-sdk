@@ -3,7 +3,7 @@ package com.rubicon.analytics.internal.platform
 import com.rubicon.analytics.RubiconInternal
 import com.rubicon.analytics.RubiconLogger
 import com.rubicon.analytics.internal.context.ContextProvider
-import com.rubicon.analytics.internal.http.HttpTransport
+import com.rubicon.analytics.internal.http.HttpTransportFactory
 import com.rubicon.analytics.internal.storage.EventStore
 import com.rubicon.analytics.internal.storage.FileSystem
 import com.rubicon.analytics.internal.storage.KeyValueStore
@@ -17,6 +17,7 @@ import kotlin.random.Random
  *
  * @property logger the platform's default logger: Logcat on Android, `NoOpLogger` on the JVM. Used
  *   when the developer sets none, and when the developer's logger throws (Logging 1, 4b).
+ * @property httpTransportFactory builds the transport once the configuration is validated (HTTP 1).
  * @property storageRoot `noBackupFilesDir/rubicon/` on Android (Disk 2a).
  * @property fileSystem the file operations of the file-based stores, a seam for fault injection.
  */
@@ -27,7 +28,7 @@ public class Platform(
     public val random: Random,
     public val dispatchers: SdkDispatchers,
     public val networkMonitor: NetworkMonitor,
-    public val httpTransport: HttpTransport,
+    public val httpTransportFactory: HttpTransportFactory,
     public val contextProvider: ContextProvider,
     public val processInfo: ProcessInfo,
     public val lifecycleSource: LifecycleSource,

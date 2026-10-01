@@ -2,8 +2,11 @@ package com.rubicon.analytics.internal.android
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import com.rubicon.analytics.LogLevel
 import com.rubicon.analytics.internal.http.HttpRequest
 import com.rubicon.analytics.internal.http.HttpResult
+import com.rubicon.analytics.internal.http.TransportSettings
+import com.rubicon.analytics.internal.log.Log
 import com.rubicon.analytics.testing.FakeClock
 import com.rubicon.analytics.testing.TestPlatform
 import org.junit.Assert.assertEquals
@@ -23,7 +26,12 @@ class TestPlatformAccessTest {
         val test = TestPlatform(clock = FakeClock(start = 0), storageRoot = root)
         test.transport.enqueue(HttpResult.HttpError(503, null, null))
 
-        val result = test.platform.httpTransport.execute(HttpRequest(HttpRequest.Method.GET, "https://h/v1/config"))
+        val transport =
+            test.platform.httpTransportFactory.create(
+                TransportSettings("key", emptyMap(), Log(LogLevel.OFF, null, test.logger)),
+                test.platform,
+            )
+        val result = transport.execute(HttpRequest(HttpRequest.Method.GET, "https://h/v1/config"))
 
         assertEquals(0L, test.platform.clock.currentTimeMillis())
         assertSame(root, test.platform.storageRoot)

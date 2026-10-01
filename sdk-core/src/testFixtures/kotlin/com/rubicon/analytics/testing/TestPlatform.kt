@@ -1,5 +1,6 @@
 package com.rubicon.analytics.testing
 
+import com.rubicon.analytics.internal.http.HttpTransportFactory
 import com.rubicon.analytics.internal.platform.Platform
 import com.rubicon.analytics.internal.platform.SdkDispatchers
 import com.rubicon.analytics.internal.storage.FileSystem
@@ -45,7 +46,7 @@ public class TestPlatform(
             random = random,
             dispatchers = SdkDispatchers(writer = dispatcher, uploader = dispatcher, watchdog = dispatcher),
             networkMonitor = networkMonitor,
-            httpTransport = transport,
+            httpTransportFactory = HttpTransportFactory { _, _ -> transport },
             contextProvider = contextProvider,
             processInfo = processInfo,
             lifecycleSource = lifecycleSource,

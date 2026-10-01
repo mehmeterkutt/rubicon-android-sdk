@@ -32,6 +32,8 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+    // Held certificates for the TLS failure test (HTTP 4).
+    testImplementation(libs.okhttp.tls)
     // Independent JSON parser for the wire contract tests (Serialization 5).
     testImplementation(libs.kotlinx.serialization.json)
 }
