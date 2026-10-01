@@ -1,0 +1,18 @@
+{
+  "type": "track",
+  "event": "SDK Diagnostics",
+  "source": "auto",
+  "message_id": "0192e4a2-0000-7000-8000-000000000001",
+  "timestamp": 1759147200000,
+  "user_id": null,
+  "device_id": "0191d0c2-1a2b-7c3d-9e4f-5a6b7c8d9e0f",
+  "properties": {
+    "period_start": "2025-09-29T08:00:00.000Z",
+    "dropped": { "total": 1240, "before_send": 3, "expired": 37, "queue_full": 1200 },
+    "issues": { "HOST_BLOCKED": 12, "STORAGE_WRITE_FAILED": 3 }
+  },
+  "context": {
+    "os": { "name": "Android", "version": "16", "api_level": 36 },
+    "library": { "name": "rubicon-android", "version": "0.1.0" }
+  }
+}

@@ -764,7 +764,7 @@ release.
 | Queue 2 | Flush triggers and suppression, no WorkManager | 6.3b, 6.4, 7.4 | 6.3b: `WriterTest` `flush triggers`; 6.4: `UploaderTest` `gates` |
 | Queue 3 | 30 events or 60 s, bounds, remote only raises | 3.1, 5.3 | 3.1: `ConfigValidatorTest.numeric bounds` (flush); 5.3: `RemoteConfigTest`.`flushing can only become less frequent` |
 | Queue 4 | 100 events / 512 KB batches, oldest first, sequential | 4.2, 6.4 | 4.2: `FileEventStoreTest` `segments` (closes at 100 events and before 512 KB); 6.4: `UploaderTest`.`batches go oldest first, are deleted after 2xx, and Sent lists their ids`, `it stops at the first failure` |
-| Queue 5 | 1000 events, 3 days, drop counters | 4.2, 6.6 | 4.2: `FileEventStoreTest` `capacity`, `age limit` (exactly 3 days kept) |
+| Queue 5 | 1000 events, 3 days, drop counters | 4.2, 6.6 | 4.2: `FileEventStoreTest` `capacity`, `age limit` (exactly 3 days kept); 6.6: `DiagnosticsTest`.`comes right before a flush and resets the counters once written` |
 | Queue 6 | No public flush policy, no pause or resume | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
 | Queue 7 | `flush.immediateEvents` | 3.1, 6.3b | 3.1: `ConfigValidatorTest.config snapshot`; 6.3b: `WriterTest`.`an immediate event flushes after it is stored, matched exactly`, `the name that counts is the final one, after the hooks` |
 | Disk 1 | Segmented append log, one segment is one batch | 4.2 | `FileEventStoreTest` `segments`, `10 000 events are read back in order` |
@@ -806,7 +806,7 @@ release.
 | Logging 2 | Levels, default `WARN`, repeat limit, no runtime setter | 2.2 | `LogTest.repeat limit` (all), `IssueCodesTest` |
 | Logging 3 | Inline gating | 2.2 | `LogTest.level gating` (all) |
 | Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3b, 6.4 | 1.1: `SourceScannerTest.println rule` (all); 2.2: `SourceScannerTest.values in log rule` (all), `LogTest.throwing logger`, `LogTest.event observer`, `LogTest.re-entrancy` (all); 3.2: `EventJavaTest.anObserverIsAJavaLambda`, `EventModelTest.safe descriptions`; 6.3b: `WriterTest` `the observer and drops`; 6.4: `UploaderTest` (`Sent` and `Dropped` updates) |
-| Logging 5 | `SDK Diagnostics` | 4.1, 6.6, 5.3 | 4.1: `DeviceStoreTest` `diagnostics counters`; 5.3: `RemoteConfigTest` `sampling`, `diagnostics follow the code switch and their own sample rate` |
+| Logging 5 | `SDK Diagnostics` | 4.1, 6.6, 5.3 | 4.1: `DeviceStoreTest` `diagnostics counters`; 5.3: `RemoteConfigTest` `sampling`, `diagnostics follow the code switch and their own sample rate`; 6.6: `DiagnosticsTest` (due once an hour across restarts, golden `sdk-diagnostics.json`, reset after the write, opted out keeps counting, gates) |
 
 ## 14. Status
 
@@ -833,7 +833,7 @@ release.
 - [x] 6.3b Writer
 - [x] 6.4 Uploader
 - [x] 6.5 Privacy
-- [ ] 6.6 SDK Diagnostics
+- [x] 6.6 SDK Diagnostics
 - [ ] 6.7 `DefaultAnalytics` and the core factory
 - [ ] 7.1 Factory and Android platform
 - [ ] 7.2 Network monitor
@@ -972,6 +972,9 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 6.5 | The upload gate | Closed only while `PENDING`. After an opt-out, events queued with consent are still sent (Privacy 1); from `PENDING`, `optOut()` deletes every pending event first, since all of them were collected without consent (Privacy 4). Opting in from `PENDING` flushes; from an opt-out it only resumes collection. | `ConsentController.allowsUploads`, `Writer` |
 | 2026-10-01 | 6.5 | `clearLocalData()` in two parts | The identity part runs on the calling thread like `reset()`, so a later call on that thread already carries the new device id; the writer then deletes the queue, uncounted, and ends the session silently. An upload already reading a segment may still complete, and a running retry wait in the uploader runs out on its own. | `Identity.clearLocalData`, `Writer` |
 | 2026-10-01 | 6.5 | Deleting on purpose | `EventStore.clear()` deletes every pending event, the open segment included, without counting: for `clearLocalData()` and for a pending consent turned into an opt-out. | `EventStore` |
+| 2026-10-01 | 6.6 | Resetting the counters | The counts the event reported are taken off once it is stored, rather than setting everything to zero, so a drop counted by the uploader or a calling thread while it is written starts the next period instead of being lost. A failed write leaves them all. | `DeviceStore.diagnosticsReported` |
+| 2026-10-01 | 6.6 | The property shape | `period_start` as an ISO string; `dropped` always with `total`, then each reason that counted, by name; `issues` by code, `{}` when none; keys sorted. Pinned by `golden/sdk-diagnostics.json`. | `Diagnostics` |
+| 2026-10-01 | 6.6 | When it is written | Right before every flush, when due, sending allowed (code switch and remote rate), collecting, and consent granted (not pending, not opted out). It passes the pipeline without hooks; its own drop is not counted, and a flush it causes does not report again. Like any track event it carries the session and the super properties of the moment. | `Writer` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |
