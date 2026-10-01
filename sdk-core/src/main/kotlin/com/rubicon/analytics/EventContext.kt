@@ -11,10 +11,15 @@ package com.rubicon.analytics
  * ```
  */
 public class EventContext internal constructor(
+    /** The app that sent the event. */
     public val app: AppContext,
+    /** The device. */
     public val device: DeviceContext,
+    /** The operating system. */
     public val os: OsContext,
+    /** The display. */
     public val screen: ScreenContext,
+    /** The network at the time of the event. */
     public val network: NetworkContext,
     /** The device language, such as `tr-TR`. */
     public val locale: String?,
@@ -22,8 +27,10 @@ public class EventContext internal constructor(
     public val timezone: String?,
     /** The session the event belongs to; `null` when there is none, such as in the background. */
     public val session: SessionContext?,
+    /** This SDK; always present. */
     public val library: LibraryContext,
 ) {
+    /** The library only: never measured values. */
     override fun toString(): String = "EventContext(library=${library.name} ${library.version})"
 }
 

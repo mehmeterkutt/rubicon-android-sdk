@@ -11,6 +11,7 @@ dependencies {
     compileOnly(libs.kover.gradle.plugin)
     compileOnly(libs.binary.compatibility.validator.plugin)
     compileOnly(libs.animalsniffer.gradle.plugin)
+    compileOnly(libs.dokka.gradle.plugin)
 
     testImplementation(platform(libs.junit5.bom))
     testImplementation(libs.junit5.jupiter)

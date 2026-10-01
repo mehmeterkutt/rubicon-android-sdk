@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Cleartext to the suite's fake server on 127.0.0.1 (adb reverse). -->
+    <application
+        android:name=".TestApp"
+        android:label="Rubicon Test"
+        android:usesCleartextTraffic="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".CheckoutActivity"
+            android:exported="true" />
+
+        <activity
+            android:name=".LinkActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="open"
+                    android:scheme="rubicon-test" />
+            </intent-filter>
+        </activity>
+
+        <!-- Exported so adb can send the suite's commands. -->
+        <receiver
+            android:name=".CommandReceiver"
+            android:exported="true" />
+
+        <!-- A second process: the SDK must do nothing there (Disk 2d). -->
+        <receiver
+            android:name=".RemoteReceiver"
+            android:exported="true"
+            android:process=":remote" />
+    </application>
+</manifest>

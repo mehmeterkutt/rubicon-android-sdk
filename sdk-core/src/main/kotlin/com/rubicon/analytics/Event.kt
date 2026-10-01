@@ -33,6 +33,7 @@ public sealed class Event {
     /** The installation's id. */
     public abstract val deviceId: String
 
+    /** What the SDK measured when the event was created; read-only for hooks (Context 4). */
     public abstract val context: EventContext
 }
 
@@ -43,8 +44,11 @@ public class TrackEvent internal constructor(
     override val timestamp: Long,
     override val userId: String?,
     override val deviceId: String,
+    /** The event name, such as `Purchase Completed`. */
     public val name: String,
+    /** The event's properties, super properties merged in; immutable. */
     public val properties: Map<String, Any?>,
+    /** What the SDK measured when the event was created. */
     override val context: EventContext,
 ) : Event() {
     /**
@@ -57,6 +61,7 @@ public class TrackEvent internal constructor(
         properties: Map<String, Any?> = this.properties,
     ): TrackEvent = TrackEvent(source, messageId, timestamp, userId, deviceId, name, properties, context)
 
+    /** The type, name and ids only: never properties or traits (Logging 4). */
     override fun toString(): String = "TrackEvent(name=$name, messageId=$messageId)"
 }
 
@@ -67,8 +72,11 @@ public class ScreenEvent internal constructor(
     override val timestamp: Long,
     override val userId: String?,
     override val deviceId: String,
+    /** The screen name, the same key on every platform, such as `checkout`. */
     public val name: String,
+    /** The screen view's properties, super properties merged in; immutable. */
     public val properties: Map<String, Any?>,
+    /** What the SDK measured when the event was created. */
     override val context: EventContext,
 ) : Event() {
     /**
@@ -81,6 +89,7 @@ public class ScreenEvent internal constructor(
         properties: Map<String, Any?> = this.properties,
     ): ScreenEvent = ScreenEvent(source, messageId, timestamp, userId, deviceId, name, properties, context)
 
+    /** The type, name and ids only: never properties or traits (Logging 4). */
     override fun toString(): String = "ScreenEvent(name=$name, messageId=$messageId)"
 }
 
@@ -91,7 +100,9 @@ public class IdentifyEvent internal constructor(
     override val timestamp: Long,
     override val userId: String?,
     override val deviceId: String,
+    /** The user's traits, as passed to `identify`; immutable. */
     public val traits: Map<String, Any?>,
+    /** What the SDK measured when the event was created. */
     override val context: EventContext,
 ) : Event() {
     /** A copy with new [traits]; everything else stays. The result is validated again before it is stored. */
@@ -99,6 +110,7 @@ public class IdentifyEvent internal constructor(
     public fun copy(traits: Map<String, Any?> = this.traits): IdentifyEvent =
         IdentifyEvent(source, messageId, timestamp, userId, deviceId, traits, context)
 
+    /** The type, name and ids only: never properties or traits (Logging 4). */
     override fun toString(): String = "IdentifyEvent(messageId=$messageId)"
 }
 
@@ -130,6 +142,7 @@ public class IdentifyEvent internal constructor(
  * ```
  */
 public fun interface BeforeSend {
+    /** Returns [event], a `copy` of it, or `null` to drop it, as the rules above allow. */
     public fun process(event: Event): Event?
 }
 
@@ -139,6 +152,7 @@ public fun interface BeforeSend {
  * from it. If it throws, it is switched off.
  */
 public fun interface EventObserver {
+    /** Called once for each [update], on the SDK's worker thread. */
     public fun onUpdate(update: EventUpdate)
 }
 
@@ -146,23 +160,30 @@ public fun interface EventObserver {
 public sealed class EventUpdate {
     /** The event passed the hooks and validation and was stored. */
     public class Queued internal constructor(
+        /** The stored event, exactly as it will be sent. */
         public val event: Event,
     ) : EventUpdate() {
+        /** The type, name and ids only: never properties or traits (Logging 4). */
         override fun toString(): String = "Queued(${event.messageId})"
     }
 
     /** The server accepted a batch with these events. */
     public class Sent internal constructor(
+        /** The `message_id`s of the events the server accepted. */
         public val messageIds: List<String>,
     ) : EventUpdate() {
+        /** The type, name and ids only: never properties or traits (Logging 4). */
         override fun toString(): String = "Sent(${messageIds.size} events)"
     }
 
     /** These events were dropped for [reason]; events dropped before they were stored are included. */
     public class Dropped internal constructor(
+        /** The `message_id`s of the dropped events. */
         public val messageIds: List<String>,
+        /** Why they were dropped. */
         public val reason: DropReason,
     ) : EventUpdate() {
+        /** The type, name and ids only: never properties or traits (Logging 4). */
         override fun toString(): String = "Dropped(${messageIds.size} events, $reason)"
     }
 }

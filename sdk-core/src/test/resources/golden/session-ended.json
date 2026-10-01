@@ -1,0 +1,23 @@
+{
+  "type": "track",
+  "event": "Session Ended",
+  "source": "auto",
+  "message_id": "0192e4a3-1000-7000-8000-000000000005",
+  "timestamp": 1759147265000,
+  "user_id": null,
+  "device_id": "0191d0c2-1a2b-7c3d-9e4f-5a6b7c8d9e0f",
+  "properties": {
+    "duration_ms": 65000
+  },
+  "context": {
+    "app": { "name": "Rubicon", "version": "1.4.0", "build": "140", "namespace": "com.rubicon.demo" },
+    "device": { "manufacturer": "Google", "model": "Pixel 8", "type": "phone", "is_emulator": false },
+    "os": { "name": "Android", "version": "16", "api_level": 36 },
+    "screen": { "width": 1080, "height": 2400, "density": 2.625 },
+    "network": { "type": "wifi", "carrier": "Vodafone TR" },
+    "locale": "tr-TR",
+    "timezone": "Europe/Istanbul",
+    "session": { "id": "0192e49f-0b1c-7d2e-8f3a-4b5c6d7e8f90", "started_at": 1759147200000 },
+    "library": { "name": "rubicon-android", "version": "0.1.0" }
+  }
+}

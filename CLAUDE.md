@@ -18,6 +18,7 @@ code is written here; read them before changing anything.
 | `:sdk-core` | `kotlin("jvm")`: configuration, pipeline, queue, storage, identity, sessions, upload. Rules: `sdk-core/CLAUDE.md` |
 | `:sdk-android` | Factory, lifecycle, context, Android platform, OkHttp interceptor; `api(":sdk-core")`. Rules: `sdk-android/CLAUDE.md` |
 | `build-logic` | Included build: module conventions, `checkSourceRules`, `BuildInfo` generation |
+| `:test-app`, `:emulator-tests` | Never published: the app the emulator suite drives, and the suite (JUnit on this machine, adb, fake server) |
 
 Apps add one dependency, `sdk-android`, which brings `sdk-core`; no separate artifact for optional
 features (Public API 6). Android code lives only in `:sdk-android`; when `:sdk-core` needs the
@@ -27,13 +28,13 @@ The demo app and its fake backend are a separate repository (`rubicon-team/rubic
 ## Commands
 
 ```bash
-./gradlew check           # ktlintCheck, test, apiCheck, lint, koverVerify, checkSourceRules (JDK 17)
+./gradlew check           # ktlint, test, apiCheck, lint, kover, Dokka (KDoc), R8, checkSourceRules (JDK 17)
 ./gradlew :sdk-core:test --tests "*QueueTest"
 ./gradlew :sdk-android:testDebugUnitTest -PokhttpTestMajor=5   # Android tests against OkHttp 5
 ./gradlew ktlintFormat    # before every commit
 ./gradlew apiDump         # after a public API change; commit the .api files
 ./gradlew :sdk-android:dependencies --configuration releaseRuntimeClasspath
-./gradlew connectedAndroidTest   # instrumented suite, needs an emulator (from step 8.1)
+ANDROID_SERIAL=emulator-5554 ./gradlew :emulator-tests:emulatorTest   # emulator suite: a running emulator
 ```
 
 ## Non-negotiables
@@ -129,8 +130,9 @@ A pull request that breaks one does not merge.
 ## Testing
 
 - Layers, tools and the rules for every test: section 5 of the plan.
-- Unit tests first, on the JVM: JUnit 5 in `:sdk-core`, Robolectric with JUnit 4 in `:sdk-android`. A
-  small instrumented suite covers what the JVM cannot (process kill, real offline, R8 build).
+- Unit tests first, on the JVM: JUnit 5 in `:sdk-core`, Robolectric with JUnit 4 in `:sdk-android`. An
+  emulator suite covers what the JVM cannot (process kill, real offline, R8 build): JUnit tests on
+  this machine drive `:test-app` through adb, on the lowest supported API level and the latest.
 - Names are backtick sentences, `` `does not upload while offline` ``, grouped with
   `@Nested inner class` (JUnit 5).
 - Coroutine tests use `runTest` with `StandardTestDispatcher` and `advanceUntilIdle()`; no
