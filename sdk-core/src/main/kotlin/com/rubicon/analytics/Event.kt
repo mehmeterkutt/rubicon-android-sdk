@@ -2,9 +2,9 @@ package com.rubicon.analytics
 
 /**
  * An event as `beforeSend` hooks and the `eventObserver` see it (Event Model 2, 6). Events are
- * immutable and only the SDK creates them. A hook may change only what the developer chose in the
- * first place, the name and the properties or traits, through `copy`; identity, time, origin and
- * [context] stay as measured.
+ * immutable and only the SDK creates them. A hook may change only the name and the properties or
+ * traits, through `copy`; identity, time, origin and [context] stay as measured. For an automatic
+ * event ([source] `AUTO`) only property values may change: see [BeforeSend].
  *
  * Subtypes may be added in minor versions: a `when` over events should keep an `else` branch.
  *
@@ -103,9 +103,31 @@ public class IdentifyEvent internal constructor(
 }
 
 /**
- * A hook that sees every event before it is stored, set with `AnalyticsConfig.beforeSend`
- * (Public API 4). Return the event, a `copy` of it, or `null` to drop it. A hook that throws drops
- * the event as well; with `debug` on, the exception is rethrown.
+ * A hook that sees each event before it is stored, set with `AnalyticsConfig.beforeSend`
+ * (Public API 4). It sees the app's events and the automatic ones, but never `SDK Diagnostics`.
+ *
+ * - For the app's own events ([EventSource.APP]) return the event, a `copy` of it with any name and
+ *   properties or traits, or `null` to drop it.
+ * - For automatic events ([EventSource.AUTO]) only the values of properties may change, for example
+ *   to mask a token: the name stays, the same top-level keys come out as went in, and `null` is not
+ *   allowed. A value may become `null` or another type, and nested values are free. To stop an
+ *   automatic event, switch its type off in `autocapture.enabled`; to name automatic screens, use
+ *   `@ScreenName`.
+ *
+ * A hook that throws, or returns what these rules do not allow, drops the event; with `debug` on,
+ * the SDK throws.
+ *
+ * ```
+ * val inviteCode = Regex("/invite/[^/]+")
+ * BeforeSend { e ->
+ *     if (e is TrackEvent && e.source == EventSource.AUTO) {
+ *         // Same keys, new values: masks the code in a deep link or a captured call.
+ *         e.copy(properties = e.properties.mapValues { (_, v) -> if (v is String) v.replace(inviteCode, "/invite/:code") else v })
+ *     } else {
+ *         e
+ *     }
+ * }
+ * ```
  */
 public fun interface BeforeSend {
     public fun process(event: Event): Event?

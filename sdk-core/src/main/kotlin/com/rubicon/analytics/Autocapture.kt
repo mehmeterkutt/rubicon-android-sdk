@@ -28,7 +28,8 @@ public enum class Autocapture {
 
     /**
      * `Deep Link Opened`, off by default. It sends the scheme, host, path, the five `utm_*`
-     * parameters and the referrer's package or host; remove tokens in the path with `beforeSend`.
+     * parameters and the referrer's package or host. Mask tokens in the path by giving that property
+     * a new value in `beforeSend`.
      */
     DEEP_LINKS,
 
