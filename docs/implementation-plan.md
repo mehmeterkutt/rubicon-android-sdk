@@ -723,7 +723,7 @@ release.
 | Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1, 2.1 | Build: `sdk-core` is `kotlin("jvm")`, `sdk-android` depends on it with `api`; `BuildInfoTest`, `RobolectricSetupTest`; 2.1: `TestPlatformAccessTest` |
 | Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 | 1.1: `explicitApi()` and `apiCheck` in `check` (gates); 3.1: `ConfigJavaTest`; 3.3: `AnalyticsJavaTest.everyMethodIsCallableFromJava` |
 | Public API 8 | Vocabulary and read-only `deviceId` | 3.3, 6.1, 6.5 | 3.3: `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
-| Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3, 6.7 | 3.3: contract in the KDoc of `Analytics`; `NoOpAnalyticsTest.calls from many threads at once never throw`; 6.1: `IdentityTest` `ordering` (identify then snapshot, calls before load in call order) |
+| Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3b, 6.7 | 3.3: contract in the KDoc of `Analytics`; `NoOpAnalyticsTest.calls from many threads at once never throw`; 6.1: `IdentityTest` `ordering` (identify then snapshot, calls before load in call order); 6.3b: `WriterTest`.`events from one thread are stored in call order`, `calls made before the writer started keep their order and identity` |
 | Event Model 1 | Top level, `properties`/`traits`, `context` ownership | 3.2, 6.3a | 3.2: `EventModelTest.golden files` (all); 6.3a: `EventPipelineTest`.`a track event matches the golden file`, `super properties merge, the event's own key wins` |
 | Event Model 2 | Sealed `TrackEvent`, `ScreenEvent`, `IdentifyEvent`; `type` on the wire | 3.2, 8.4 | 3.2: `EventModelTest.golden files` (all) |
 | Event Model 3 | Immutable normalized maps, validated twice | 2.5, 6.3a | 2.5: `PropertyNormalizerTest.deep copies` (all); 6.3a: `EventPipelineTest`.`an invalid property from a hook is dropped by the second validation` |
@@ -760,20 +760,20 @@ release.
 | Lifecycle 4 | Install and update detection | 7.4 |  |
 | Lifecycle 5 | Plain names, `source` `app`/`auto` | 3.2, 7.4 | 3.2: `EventModelTest.wire names` |
 | Lifecycle 6 | `Autocapture` set and defaults, `NETWORK_REQUESTS` off at once | 3.1, 5.3, 7.4, 7.6 | 3.1: `ConfigValidatorTest.default values` |
-| Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3, 6.4 |  |
-| Queue 2 | Flush triggers and suppression, no WorkManager | 6.3, 6.4, 7.4 |  |
+| Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3b, 6.4 | 6.3b: `WriterTest` (single writer, channel of 1000, backpressure, conflated upload signal) |
+| Queue 2 | Flush triggers and suppression, no WorkManager | 6.3b, 6.4, 7.4 | 6.3b: `WriterTest` `flush triggers` |
 | Queue 3 | 30 events or 60 s, bounds, remote only raises | 3.1, 5.3 | 3.1: `ConfigValidatorTest.numeric bounds` (flush); 5.3: `RemoteConfigTest`.`flushing can only become less frequent` |
 | Queue 4 | 100 events / 512 KB batches, oldest first, sequential | 4.2, 6.4 | 4.2: `FileEventStoreTest` `segments` (closes at 100 events and before 512 KB) |
 | Queue 5 | 1000 events, 3 days, drop counters | 4.2, 6.6 | 4.2: `FileEventStoreTest` `capacity`, `age limit` (exactly 3 days kept) |
 | Queue 6 | No public flush policy, no pause or resume | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
-| Queue 7 | `flush.immediateEvents` | 3.1, 6.3 | 3.1: `ConfigValidatorTest.config snapshot` |
+| Queue 7 | `flush.immediateEvents` | 3.1, 6.3b | 3.1: `ConfigValidatorTest.config snapshot`; 6.3b: `WriterTest`.`an immediate event flushes after it is stored, matched exactly`, `the name that counts is the final one, after the hooks` |
 | Disk 1 | Segmented append log, one segment is one batch | 4.2 | `FileEventStoreTest` `segments`, `10 000 events are read back in order` |
 | Disk 2a | Everything under `noBackupFilesDir/rubicon/` | 4.1, 4.2, 7.1 | 4.1: `FileKeyValueStore` writes under `Platform.storageRoot`; `FileKeyValueStoreTest.files are app-private` |
 | Disk 2b | Fixed-width index from the directory | 4.2 | `FileEventStoreTest.index order survives a restart and gaps` |
 | Disk 2c | One directory per key, others deleted (`api_key_changed`) | 2.3, 4.2 | 2.3: `HttpDatesAndHashingTest.sha-256` (all); 4.2: `FileEventStoreTest` `events of another API key are deleted and counted`, `a later format directory is never touched` |
 | Disk 2d | Main process only | 7.1, 8.1 |  |
 | Disk 3 | JSON Lines equal to the wire event, `v1` directory | 4.2, 2.4 | 2.4: `JsonTest.reading fields` (all), `JsonTest.round trip` (a line never holds a raw line break); 4.2: `FileEventStoreTest` `the batch body` (byte for byte) |
-| Disk 4 | One `write()` per event, fsync points, `.tmp` recovery | 4.2, 7.4, 8.1 | 4.2: `FileEventStoreTest` `leftover open segment` (truncation at every byte), `failures` |
+| Disk 4 | One `write()` per event, fsync points, `.tmp` recovery | 4.2, 7.4, 8.1, 6.3b | 4.2: `FileEventStoreTest` `leftover open segment` (truncation at every byte), `failures`; 6.3b: `WriterTest`.`backgrounding flushes and syncs` |
 | Disk 5 | Corrupt lines skipped, unreadable segments retried then deleted | 4.2 | `FileEventStoreTest` `corrupt lines`, `unknown files are deleted with a warning`, `an unreadable segment is retried and deleted after three consecutive failures` |
 | Disk 6 | No encryption, storage not replaceable | 2.1 | 2.1: `EventStore`, `KeyValueStore` are `@RubiconInternal` (opt-in error for apps); `InMemoryStoresTest` |
 | Disk 7 | Atomic person and device stores with `v` | 4.1 | `FileKeyValueStoreTest` `atomic replacement`; `PersonStoreTest` and `DeviceStoreTest` (`many updates in a row produce one write`, newer `v`) |
@@ -795,7 +795,7 @@ release.
 | Retry 5 | Pipeline wait and per-segment attempts persisted, clock guard | 4.1, 5.2 | 4.1: `DeviceStoreTest.the state and the cache read back as written` (retry object); 5.2: `RetryPolicyTest` `persistence` (restart, clock moved back by a day) |
 | Retry 6 | One default-network callback, `INTERNET` without `VALIDATED` | 7.2 |  |
 | Privacy 1 | `optOut` stops new events, queue still sends | 6.5, 7.6 |  |
-| Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3, 6.5 | 4.1: `DeviceStoreTest.consent is null, granted or denied` |
+| Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3b, 6.5 | 4.1: `DeviceStoreTest.consent is null, granted or denied`; 6.3b: `WriterTest`.`the stores are loaded and written by the writer` |
 | Privacy 3 | `clearLocalData`, read-only `deviceId` | 6.5 |  |
 | Privacy 4 | `Consent` `GRANTED`/`PENDING` | 3.1, 6.5 | 3.1: `ConfigValidatorTest.default values` |
 | Privacy 5a | No field presets, checklist in the guide | 8.5 |  |
@@ -805,7 +805,7 @@ release.
 | Logging 1 | `RubiconLogger`, instance-owned, Logcat default | 2.2, 7.1 | 2.2: `LogTest.log lines` (all), `LoggingJavaTest` |
 | Logging 2 | Levels, default `WARN`, repeat limit, no runtime setter | 2.2 | `LogTest.repeat limit` (all), `IssueCodesTest` |
 | Logging 3 | Inline gating | 2.2 | `LogTest.level gating` (all) |
-| Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3, 6.4 | 1.1: `SourceScannerTest.println rule` (all); 2.2: `SourceScannerTest.values in log rule` (all), `LogTest.throwing logger`, `LogTest.event observer`, `LogTest.re-entrancy` (all); 3.2: `EventJavaTest.anObserverIsAJavaLambda`, `EventModelTest.safe descriptions` |
+| Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3b, 6.4 | 1.1: `SourceScannerTest.println rule` (all); 2.2: `SourceScannerTest.values in log rule` (all), `LogTest.throwing logger`, `LogTest.event observer`, `LogTest.re-entrancy` (all); 3.2: `EventJavaTest.anObserverIsAJavaLambda`, `EventModelTest.safe descriptions`; 6.3b: `WriterTest` `the observer and drops` |
 | Logging 5 | `SDK Diagnostics` | 4.1, 6.6, 5.3 | 4.1: `DeviceStoreTest` `diagnostics counters`; 5.3: `RemoteConfigTest` `sampling`, `diagnostics follow the code switch and their own sample rate` |
 
 ## 14. Status
@@ -830,7 +830,7 @@ release.
 - [x] 6.1 Identity and super properties
 - [x] 6.2 Session
 - [x] 6.3a Event pipeline
-- [ ] 6.3b Writer
+- [x] 6.3b Writer
 - [ ] 6.4 Uploader
 - [ ] 6.5 Privacy
 - [ ] 6.6 SDK Diagnostics
@@ -960,6 +960,9 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 6.3a | The shape of `ContextProvider` (2.1 allowed refining it; 7.3 implements it) | Typed values instead of maps: `StaticValues` and `CallTimeValues`, `@RubiconInternal` so `sdk-android` can build them (the public context classes have internal constructors). Each call takes the disabled fields, so the provider never reads them (Context 6); the pipeline leaves them out again whatever it gets. | `ContextProvider`, step 7.3 |
 | 2026-10-01 | 6.3a | Session events outside an event | `EventPipeline.processSessionEvents` takes the `Session Ended` produced on returning to the foreground, at process start and at a person change, so it passes the same steps as every event (hooks included). | `EventPipeline`, step 6.3b |
 | 2026-10-01 | 6.3a | Details of the steps | Static context is read once, lazily, on the worker. `library.name` is `rubicon-android`. Super properties do not merge into identify events (traits only). A hook's `null` for an app event drops it quietly (DEBUG), as decided in 4.2; a throw logs `HOOK_THREW`. An app event renamed to an invalid name by a hook is a violation. The second validation cuts strings to 1024 characters like the first. Session events take the call-time context of the event that caused them. | `EventPipeline` |
+| 2026-10-01 | 6.3b | The count trigger with events pending that cannot be sent | It counts the events appended since the last flush, starting at process start from the events left over (Queue 2: "including events left by a previous process"); any flush resets it. Counting everything pending would flush, and close a one-event segment, on every new event while offline. | `Writer` |
+| 2026-10-01 | 6.3b | Consent changes and `clearLocalData` | Their messages are added with their behaviour in 6.5 (Privacy), which owns those rules; the writer has the message channel they will use. | Step 6.5 |
+| 2026-10-01 | 6.3b | Writer details | The stores are written after every message when something changed. Lifecycle, network and person-cleared signals share the event channel, so they keep their order; if it is full they are skipped with a DEBUG line. An event created while `collecting` is off is not written. A `backpressure` drop is reported to the observer from the calling thread, since the event never reaches the writer. 6.3a and 6.3b go in one pull request, as the user asked. | `Writer` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |
