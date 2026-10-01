@@ -308,11 +308,12 @@ never sees it, and `jvmTarget` does not restrict the Java API.
 
 - Read: Configuration 1 to 6, Queue 3 and 7, Session (timeout bounds), Lifecycle (`Autocapture`
   values), Context (`ContextField` values), Privacy 2 and 4, Logging (configuration table).
-- Build: `AnalyticsConfig(apiKey)` with `host`, `debug`, `beforeSend` and the groups `flush`,
-  `session`, `autocapture`, `context`, `privacy`, `logging`, `network`, `remote`; enums `Autocapture`,
+- Build: `AnalyticsConfig(apiKey)` with `host`, `debug` and the groups `flush`,
+  `session`, `autocapture`, `context`, `privacy`, `logging`, `network` (no `remote` group, section 15); enums `Autocapture`,
   `ContextField`, `Consent`; freezing property delegate; validator (bounds, clamping, debug
   exceptions, host normalization with optional path, reserved headers); immutable internal
-  `ConfigSnapshot`; `DEFAULT_HOST` (D7). KDoc with bounds on every numeric setting.
+  `ConfigSnapshot`; `DEFAULT_HOST` (D7). KDoc with bounds on every numeric setting. `beforeSend` and
+  `logging.eventObserver` come in 3.2 with their types (split in step 3.1, section 15).
 - Tests: defaults of every setting; every bound at, below and above in both modes; blank key and
   invalid host in both modes (release returns the no-op signal, not an exception); host with and
   without trailing slash and path; `http://` warns in release; reserved header override throws in
@@ -324,6 +325,7 @@ never sees it, and `jvmTarget` does not restrict the Java API.
 
 - Read: Event Model (all), Public API 4 and 5, Logging 4c, Lifecycle (`source`).
 - Build: `sealed class Event` with `TrackEvent`, `ScreenEvent`, `IdentifyEvent`; `EventContext`;
+  `AnalyticsConfig.beforeSend` and `logging.eventObserver` (moved here from 3.1);
   `EventSource`; internal constructors; limited `copy` with `@JvmOverloads`; `toString` with type,
   name and message id only; `BeforeSend`; `EventObserver`, `EventUpdate` (`Queued`, `Sent`,
   `Dropped`); `DropReason` with the ten reasons. Wire mapping of each type (snake_case keys, epoch ms
@@ -697,7 +699,7 @@ release.
 | Public API 4 | `beforeSend` list fixed at creation, fail-closed | 3.2, 6.3 |  |
 | Public API 5 | Public methods return `Unit` | 3.3 |  |
 | Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1, 2.1 | Build: `sdk-core` is `kotlin("jvm")`, `sdk-android` depends on it with `api`; `BuildInfoTest`, `RobolectricSetupTest`; 2.1: `TestPlatformAccessTest` |
-| Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 | 1.1: `explicitApi()` and `apiCheck` in `check` (gates) |
+| Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 | 1.1: `explicitApi()` and `apiCheck` in `check` (gates); 3.1: `ConfigJavaTest` |
 | Public API 8 | Vocabulary and read-only `deviceId` | 3.3, 6.1, 6.5 |  |
 | Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3, 6.7 |  |
 | Event Model 1 | Top level, `properties`/`traits`, `context` ownership | 3.2, 6.3 |  |
@@ -707,11 +709,11 @@ release.
 | Event Model 5 | Epoch ms, ISO dates in properties, `sent_at` per attempt | 2.3, 6.4 | 2.3: `IsoDatesTest` (all) |
 | Event Model 6 | Public classes, internal constructors, limited `copy` | 3.2 |  |
 | Configuration 1 | Code plus restrict-only remote, allowlist, next launch, two immediate flags | 5.3 |  |
-| Configuration 2 | One class, small groups, tuning internal | 3.1 |  |
-| Configuration 3 | Only `apiKey` required, factory validation, one instance, main process | 3.1, 6.7, 7.1 |  |
-| Configuration 4 | Snapshot and freeze | 3.1 |  |
+| Configuration 2 | One class, small groups, tuning internal | 3.1 | `ConfigValidatorTest.default values` (all), `ConfigJavaTest` |
+| Configuration 3 | Only `apiKey` required, factory validation, one instance, main process | 3.1, 6.7, 7.1 | 3.1: `ConfigValidatorTest` `api key`, `host url`, `numeric bounds`, `custom headers` |
+| Configuration 4 | Snapshot and freeze | 3.1 | `ConfigValidatorTest` `config snapshot`, `frozen config` |
 | Configuration 5 | Public hatches, internal `Platform`, `HttpURLConnection`, OkHttp `compileOnly` | 2.1, 5.1, 7.6 | 2.1: `FakeEnvironmentTest.test platform` (all), `TestPlatformAccessTest` |
-| Configuration 6 | No platform types in configuration | 3.1 |  |
+| Configuration 6 | No platform types in configuration | 3.1 | `ConfigJavaTest` (the whole configuration compiles and runs on the JVM) |
 | Identity 1 | `deviceId` and `userId` in files outside backup | 4.1, 6.1, 7.1 |  |
 | Identity 2 | Implicit merge: both ids on every event | 3.2, 6.1 |  |
 | Identity 3 | One `identify`, set-only traits never stored | 6.1 |  |
@@ -723,11 +725,11 @@ release.
 | Context 3 | Twenty fields, unknown omitted (list to be revisited) | 7.3, 8.4 |  |
 | Context 4 | Everything in `context`, read-only for hooks | 3.2 |  |
 | Context 5 | `register`/`unregister`, validated at registration | 2.5, 6.1 | 2.5: `PropertyNormalizerTest.property count` (super properties dropped first) |
-| Context 6 | `context.disabledFields`, never read when disabled | 3.1, 7.3 |  |
+| Context 6 | `context.disabledFields`, never read when disabled | 3.1, 7.3 | 3.1: `ConfigValidatorTest.default values` (18 values, no `LIBRARY_*`) |
 | Session 1 | SDK computes sessions, on every event | 6.2 |  |
 | Session 2 | UUIDv7 id plus `started_at` | 6.2 |  |
 | Session 3 | Foreground keeps alive, background never extends | 6.2, 7.4 |  |
-| Session 4 | 5 min timeout (10 s to 2 h), 12 h maximum, no timers | 3.1, 6.2 |  |
+| Session 4 | 5 min timeout (10 s to 2 h), 12 h maximum, no timers | 3.1, 6.2 | 3.1: `ConfigValidatorTest.numeric bounds` (background timeout) |
 | Session 5 | `Session Started`/`Ended`, backdated with `duration_ms` | 6.2, 8.4 |  |
 | Session 6 | Persisted in `PersonStore`, resumed after restart | 4.1, 6.2 |  |
 | Lifecycle 1 | Event inventory and properties | 7.4, 7.5, 7.6, 8.4 |  |
@@ -735,14 +737,14 @@ release.
 | Lifecycle 3 | Activity screens, `@ScreenName`, `name_source` | 7.5 |  |
 | Lifecycle 4 | Install and update detection | 7.4 |  |
 | Lifecycle 5 | Plain names, `source` `app`/`auto` | 3.2, 7.4 |  |
-| Lifecycle 6 | `Autocapture` set and defaults, `NETWORK_REQUESTS` off at once | 3.1, 5.3, 7.4, 7.6 |  |
+| Lifecycle 6 | `Autocapture` set and defaults, `NETWORK_REQUESTS` off at once | 3.1, 5.3, 7.4, 7.6 | 3.1: `ConfigValidatorTest.default values` |
 | Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3, 6.4 |  |
 | Queue 2 | Flush triggers and suppression, no WorkManager | 6.3, 6.4, 7.4 |  |
-| Queue 3 | 30 events or 60 s, bounds, remote only raises | 3.1, 5.3 |  |
+| Queue 3 | 30 events or 60 s, bounds, remote only raises | 3.1, 5.3 | 3.1: `ConfigValidatorTest.numeric bounds` (flush) |
 | Queue 4 | 100 events / 512 KB batches, oldest first, sequential | 4.2, 6.4 |  |
 | Queue 5 | 1000 events, 3 days, drop counters | 4.2, 6.6 |  |
 | Queue 6 | No public flush policy, no pause or resume | 3.3 |  |
-| Queue 7 | `flush.immediateEvents` | 3.1, 6.3 |  |
+| Queue 7 | `flush.immediateEvents` | 3.1, 6.3 | 3.1: `ConfigValidatorTest.config snapshot` |
 | Disk 1 | Segmented append log, one segment is one batch | 4.2 |  |
 | Disk 2a | Everything under `noBackupFilesDir/rubicon/` | 4.1, 4.2, 7.1 |  |
 | Disk 2b | Fixed-width index from the directory | 4.2 |  |
@@ -773,11 +775,11 @@ release.
 | Privacy 1 | `optOut` stops new events, queue still sends | 6.5, 7.6 |  |
 | Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3, 6.5 |  |
 | Privacy 3 | `clearLocalData`, read-only `deviceId` | 6.5 |  |
-| Privacy 4 | `Consent` `GRANTED`/`PENDING` | 3.1, 6.5 |  |
+| Privacy 4 | `Consent` `GRANTED`/`PENDING` | 3.1, 6.5 | 3.1: `ConfigValidatorTest.default values` |
 | Privacy 5a | No field presets, checklist in the guide | 8.5 |  |
 | Privacy 5b | Deep links collect `utm_*` only | 7.5 |  |
 | Privacy 5c | Network capture without headers or bodies, masked ids | 7.6 |  |
-| Privacy 6 | No IP setting in the SDK | 3.1 |  |
+| Privacy 6 | No IP setting in the SDK | 3.1 | `ConfigValidatorTest.frozen config` (the 14 settings, none about IP) |
 | Logging 1 | `RubiconLogger`, instance-owned, Logcat default | 2.2, 7.1 | 2.2: `LogTest.log lines` (all), `LoggingJavaTest` |
 | Logging 2 | Levels, default `WARN`, repeat limit, no runtime setter | 2.2 | `LogTest.repeat limit` (all), `IssueCodesTest` |
 | Logging 3 | Inline gating | 2.2 | `LogTest.level gating` (all) |
@@ -795,7 +797,7 @@ release.
 - [x] 2.3 Identifiers and time
 - [x] 2.4 JSON layer
 - [x] 2.5 Property validation and normalization
-- [ ] 3.1 Configuration
+- [x] 3.1 Configuration
 - [ ] 3.2 Event model and public types
 - [ ] 3.3 The `Analytics` interface
 - [ ] 4.1 Key-value stores
@@ -871,6 +873,12 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-09-30 | 2.5 | Nesting depth counted how | A map or list that is a property value is level 1; containers are allowed up to level 3 (the `cart.items[0]` example of Serialization 3) and a container at level 4 is dropped, which also stops self-referencing maps and lists. | - |
 | 2026-09-30 | 2.5 | Which properties go over 256 | The first 256 in iteration order are kept; when super properties merge in, those not overridden by the event fill the remaining room in their own order. | - |
 | 2026-09-30 | 2.5 | Debug exception type | `IllegalArgumentException` for the first problem that throws in debug, as Configuration 3 uses; a truncation only logs, once per key. | - |
+| 2026-10-01 | 3.1 | `ContextField` values (the page names 5 of 20 fields) | One value per field in the same pattern, 18 in all: `APP_NAME`, `APP_VERSION`, `APP_BUILD`, `APP_NAMESPACE`, `DEVICE_MANUFACTURER`, `DEVICE_MODEL`, `DEVICE_TYPE`, `DEVICE_IS_EMULATOR`, `OS_NAME`, `OS_VERSION`, `OS_API_LEVEL`, `SCREEN_WIDTH`, `SCREEN_HEIGHT`, `SCREEN_DENSITY`, `NETWORK_TYPE`, `NETWORK_CARRIER`, `LOCALE`, `TIMEZONE`. No `LIBRARY_*` values, since those fields cannot be disabled. Revisit in 7.3 with the field list. | - |
+| 2026-10-01 | 3.1 | `remote.enabled` (the `remote` group of Configuration 2) | Removed by the user: the backend provides `/v1/config`, and a missing endpoint already means "no remote values" (Configuration 1, rule 4). There is no `remote` group. | Configuration page, decision 2 (version 9) |
+| 2026-10-01 | 3.1 | `network.headers` and reserved headers | `Map<String, String>`, default empty. Reserved, in any letter case: `Authorization`, `Content-Type`, `Content-Encoding`, `Content-Length`, `User-Agent`, `Host`, `If-None-Match`, and any name starting with `X-Rubicon-` (the SDK's own `X-` headers). | `sdk-core/CLAUDE.md` Configuration |
+| 2026-10-01 | 3.1 | What an invalid `host` is | Not an `http` or `https` URL with a host name, or one with a query, fragment, user info or surrounding whitespace (never trimmed). Trailing slashes are removed; `http://` warns (`CLEARTEXT_HOST`) in both modes. | `sdk-core/CLAUDE.md` Configuration |
+| 2026-10-01 | 3.1 | `beforeSend` and `logging.eventObserver` need the types of 3.2 | Added in 3.2 with `BeforeSend`, `Event` and `EventObserver`; adding a property to a builder is compatible. | Steps 3.1 and 3.2 |
+| 2026-10-01 | 3.1 | Surface kept to the decisions | No public constant of the `Autocapture` defaults; `toString` of the config and the snapshot never shows the API key or header values. | - |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

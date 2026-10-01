@@ -34,9 +34,9 @@ rules are in the root `CLAUDE.md`.
 - `AnalyticsConfig(apiKey)`. Top level: `host` (`DEFAULT_HOST` SaaS URL, overridable for on-prem,
   optional path prefix, trailing slash normalized; endpoints `{host}/v1/batch`, `{host}/v1/config`),
   `debug`, `beforeSend`. Groups as `val`s: `flush`, `session`, `autocapture`, `context`, `privacy`,
-  `logging`, `network`, `remote` (Configuration 2). About twenty public settings; tuning values (batch
-  and queue limits, backoff, retry limits, HTTP timeouts, compression) are internal constants; making
-  one public is a design discussion.
+  `logging`, `network` (Configuration 2; no `remote` group). About twenty public settings; tuning
+  values (batch and queue limits, backoff, retry limits, HTTP timeouts, compression) are internal
+  constants; making one public is a design discussion.
 - No platform types (`Context` is only a factory parameter); platform-neutral names
   (`Autocapture.APP_LIFECYCLE`), `:sdk-android` decides the mechanism; Android-only options live in
   the options class of the feature that needs them (Configuration 6).
@@ -51,8 +51,9 @@ rules are in the root `CLAUDE.md`.
   `sample_rate`. Saved, applied next launch; `enabled = false` and `NETWORK_REQUESTS` off apply at once
   (runtime flags outside the snapshot). Failure -> last valid remote values or code. Same validator;
   an invalid key is ignored with WARN.
-- `network.headers` never override `Authorization`, `Content-Type`, `Content-Encoding`, `User-Agent`
-  or the SDK's own `X-` headers. No IP flag or header: that is a backend setting (Privacy 6).
+- `network.headers` never override `Authorization`, `Content-Type`, `Content-Encoding`, `Content-Length`,
+  `User-Agent`, `Host`, `If-None-Match` or `X-Rubicon-*`, in any case. No IP flag or header: that is
+  a backend setting (Privacy 6).
 
 ## Identity, super properties and privacy
 
