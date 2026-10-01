@@ -48,6 +48,7 @@ public class RubiconNetworkInterceptor
         private val capture: AutomaticCapture? = analytics as? AutomaticCapture
         private val patterns: HostPatterns = HostPatterns.parse(hosts, capture)
 
+        /** Proceeds with the request unchanged and, for a captured host, records the call. */
         override fun intercept(chain: Interceptor.Chain): Response {
             val request = chain.request()
             if (!captures(request)) return chain.proceed(request)

@@ -803,7 +803,7 @@ release.
 | Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3b, 6.5 | 4.1: `DeviceStoreTest.consent is null, granted or denied`; 6.3b: `WriterTest`.`the stores are loaded and written by the writer`; 6.5: `PrivacyTest` `the starting state` (stored choice wins, `persistConsent`, early `isOptedOut`, calls before load) |
 | Privacy 3 | `clearLocalData`, read-only `deviceId` | 6.5 | 6.5: `PrivacyTest` `clearing local data` |
 | Privacy 4 | `Consent` `GRANTED`/`PENDING` | 3.1, 6.5 | 3.1: `ConfigValidatorTest.default values`; 6.5: `PrivacyTest` `pending consent`, `PENDING is opted out, meaning nothing is sent now` |
-| Privacy 5a | No field presets, checklist in the guide | 8.5 |  |
+| Privacy 5a | No field presets, checklist in the guide | 8.5 | `README.md` "Checklist for child-directed apps and apps that collect no location" |
 | Privacy 5b | Deep links collect `utm_*` only | 7.5 | `ActivityCaptureTest`.`a deep link sends scheme, host, path, utm parameters and the referrer only`, `a singleTop activity's new intent is captured once`, `a restored or rotated activity does not send its link again` |
 | Privacy 5c | Network capture without headers or bodies, masked ids | 7.6 | `RubiconNetworkInterceptorTest`.`ids are digits, UUIDs or hexadecimal longer than 16 characters`, `the request is passed on untouched`, `an unconfigured host is not captured`, `it passes through when not capturing, for the SDK's host and for another Analytics` |
 | Privacy 6 | No IP setting in the SDK | 3.1 | `ConfigValidatorTest.frozen config` (the 14 settings, none about IP) |
@@ -850,7 +850,7 @@ release.
 - [x] 8.2 R8 and consumer rules`
 - [x] 8.3 App without OkHttp
 - [x] 8.4 Wire contract complete
-- [ ] 8.5 Documentation
+- [x] 8.5 Documentation
 - [ ] 8.6 Publishing
 - [ ] 9.1 Fake backend
 - [ ] 9.2 Demo app on the SDK
@@ -1027,6 +1027,7 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 8.2 | How R8 is checked | `:test-app:checkR8`, part of `check`, builds the minified `fullRelease` and `noOkhttpRelease` and fails if R8 wrote missing rules (it already fails the build on a missing class). `ReleaseSmokeTest` runs on the installed release build: lifecycle and sessions, a class-named and an annotated screen, the interceptor and a deep link; it reads no app files, since a release build is not debuggable. Green on API 21 and 36. | `:test-app`, `ReleaseSmokeTest` |
 | 2026-10-01 | 8.3 | How the app without OkHttp is checked | `:test-app:checkNoOkhttp`, part of `check`, fails if any `com.squareup.okhttp3` module reaches the `noOkhttp` runtime classpath, so the emulator test runs without it; that test starts the app, tracks, flushes on background and finds no `NoClassDefFoundError` in Logcat, on API 21 and 36. R8 of the same variant is in `checkR8`. | `:test-app`, `EmulatorSuiteTest` |
 | 2026-10-01 | 8.4 | How the golden files are produced and compared | The lifecycle and session files are what the real writer stores for a scripted first launch, background, return after the timeout and update, with a fixed clock and the sample context; the envelope is what `FileEventStore.writeBatch` streams. Ids are random and the library version changes per release, so the test checks that they are UUIDv7 and present, and takes their values from the file; everything else is compared structurally. `Deep Link Opened` and `Network Request` get their properties in `sdk-android`: `GoldenPropertiesTest` runs the real producers against the files' `properties`, and the core test checks the rest of those events. `GoldenFilesTest` also fails when a file is added or missing. | `GoldenFilesTest`, `GoldenPropertiesTest` |
+| 2026-10-01 | 8.5 | KDoc check and the guide | Dokka 2.0.0 (a build plugin only) runs in `check` for both SDK modules with `reportUndocumented` and `failOnWarning`, public visibility only, the `internal` packages suppressed; it found 31 public symbols without KDoc (event and context properties, `toString` overrides, the hook and observer methods, `intercept`), now documented. `README.md` is the integration guide: install, creation, settings, events, identity, screens, automatic events, HTTP calls, consent and the privacy checklist, hooks, QA, R8 and start-up, Java. | `build-logic`, `README.md` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

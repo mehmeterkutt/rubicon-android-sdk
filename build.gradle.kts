@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kover) apply false
     alias(libs.plugins.binary.compatibility.validator) apply false
     alias(libs.plugins.animalsniffer) apply false
+    alias(libs.plugins.dokka) apply false
 }
 
 // `./gradlew check` runs `check` in every module; this adds the build-logic tests (source rules).

@@ -28,7 +28,7 @@ The demo app and its fake backend are a separate repository (`rubicon-team/rubic
 ## Commands
 
 ```bash
-./gradlew check           # ktlintCheck, test, apiCheck, lint, koverVerify, checkSourceRules (JDK 17)
+./gradlew check           # ktlint, test, apiCheck, lint, kover, Dokka (KDoc), R8, checkSourceRules (JDK 17)
 ./gradlew :sdk-core:test --tests "*QueueTest"
 ./gradlew :sdk-android:testDebugUnitTest -PokhttpTestMajor=5   # Android tests against OkHttp 5
 ./gradlew ktlintFormat    # before every commit

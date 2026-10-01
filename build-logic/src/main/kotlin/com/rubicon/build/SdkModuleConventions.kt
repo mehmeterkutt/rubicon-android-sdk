@@ -6,6 +6,8 @@ import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.withType
+import org.jetbrains.dokka.gradle.DokkaExtension
+import org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier
 import kotlinx.validation.ApiValidationExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinProjectExtension
@@ -29,6 +31,7 @@ internal fun Project.configureSdkModule() {
     pluginManager.apply("org.jetbrains.kotlinx.kover")
     pluginManager.apply("org.jetbrains.kotlinx.binary-compatibility-validator")
     pluginManager.apply(SourceRulesPlugin::class.java)
+    pluginManager.apply("org.jetbrains.dokka")
 
     extensions.configure<KotlinProjectExtension> {
         explicitApi()
@@ -64,7 +67,22 @@ internal fun Project.configureSdkModule() {
         }
     }
 
+    // KDoc on every public symbol (step 8.5): an undocumented one is a warning, and warnings fail.
+    extensions.configure<DokkaExtension> {
+        dokkaPublications.named("html") {
+            failOnWarning.set(true)
+        }
+        dokkaSourceSets.configureEach {
+            reportUndocumented.set(true)
+            documentedVisibilities.set(setOf(VisibilityModifier.Public))
+            perPackageOption {
+                matchingRegex.set("com\\.rubicon\\.analytics\\.internal(\\..*)?")
+                suppress.set(true)
+            }
+        }
+    }
+
     tasks.named("check") {
-        dependsOn("koverVerify")
+        dependsOn("koverVerify", "dokkaGeneratePublicationHtml")
     }
 }

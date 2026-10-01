@@ -82,8 +82,10 @@ public class AnalyticsConfig(
     /** Requests the SDK sends. */
     public val network: NetworkConfig = NetworkConfig(freezer)
 
+    /** The host only: never the API key or headers (Logging 4). */
     override fun toString(): String = "AnalyticsConfig(host=$host)"
 
+    /** Constants of the configuration. */
     public companion object {
         /** The SaaS base URL, used when [host] is not set. */
         public const val DEFAULT_HOST: String = "https://api.rubicon.example"
