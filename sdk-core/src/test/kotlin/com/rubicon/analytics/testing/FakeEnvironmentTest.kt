@@ -1,5 +1,8 @@
 package com.rubicon.analytics.testing
 
+import com.rubicon.analytics.LogLevel
+import com.rubicon.analytics.internal.http.TransportSettings
+import com.rubicon.analytics.internal.log.Log
 import com.rubicon.analytics.internal.platform.LifecycleSource
 import com.rubicon.analytics.internal.platform.NetworkMonitor
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -144,7 +147,10 @@ class FakeEnvironmentTest {
             assertSame(test.elapsedClock, platform.elapsedClock)
             assertSame(test.random, platform.random)
             assertSame(test.networkMonitor, platform.networkMonitor)
-            assertSame(test.transport, platform.httpTransport)
+            assertSame(
+                test.transport,
+                platform.httpTransportFactory.create(TransportSettings("key", emptyMap(), Log(LogLevel.OFF, null, test.logger)), platform),
+            )
             assertSame(test.contextProvider, platform.contextProvider)
             assertSame(test.processInfo, platform.processInfo)
             assertSame(test.lifecycleSource, platform.lifecycleSource)

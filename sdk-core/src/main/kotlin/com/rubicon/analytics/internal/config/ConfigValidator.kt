@@ -2,11 +2,11 @@ package com.rubicon.analytics.internal.config
 
 import com.rubicon.analytics.AnalyticsConfig
 import com.rubicon.analytics.LogLevel
+import com.rubicon.analytics.internal.http.Headers
 import com.rubicon.analytics.internal.log.Code
 import com.rubicon.analytics.internal.log.Log
 import java.util.Collections
 import java.util.EnumSet
-import java.util.Locale
 
 /**
  * Validates an `AnalyticsConfig` and takes its snapshot (Configuration 3). Validation itself never
@@ -18,11 +18,6 @@ internal object ConfigValidator {
     val FLUSH_AT_BOUNDS: IntRange = 1..100
     val FLUSH_INTERVAL_MS_BOUNDS: LongRange = 1_000L..600_000L
     val BACKGROUND_TIMEOUT_MS_BOUNDS: LongRange = 10_000L..7_200_000L
-
-    /** Headers the SDK sets itself; names compare in any letter case (Configuration 5, HTTP 5). */
-    private val RESERVED_HEADERS =
-        setOf("authorization", "content-type", "content-encoding", "content-length", "user-agent", "host", "if-none-match")
-    private const val RESERVED_PREFIX = "x-rubicon-"
 
     class Issue(
         val code: Code,
@@ -155,8 +150,7 @@ internal object ConfigValidator {
     ): Map<String, String> {
         val allowed = LinkedHashMap<String, String>()
         for ((name, value) in headers) {
-            val lower = name.lowercase(Locale.ROOT)
-            if (lower in RESERVED_HEADERS || lower.startsWith(RESERVED_PREFIX)) {
+            if (Headers.isReserved(name)) {
                 issues +=
                     Issue(
                         Code.RESERVED_HEADER,
