@@ -480,7 +480,8 @@ never sees it, and `jvmTarget` does not restrict the Java API.
   flush), `BackgroundTrigger`, `NetworkTrigger` (only while events are pending),
   `ImmediateEventTrigger` (exact, case-sensitive final name after hooks, flush after persisting,
   DEBUG line). No startup flush and no periodic timer.
-- Tests: order of calls from one thread is kept; a hook that drops, throws, renames or adds
+- Tests: order of calls from one thread is kept; no event is created once `RuntimeFlags.collecting`
+  is off (remote kill switch or outside `sample_rate`, 5.3); a hook that drops, throws, renames or adds
   properties, one that returns an invalid property, and one that returns an event it built itself
   or of a foreign subclass (section 15, step 3.2); on an automatic event a hook that changes values
   (to `null`, to another type, nested values) passes, and one that renames, adds or removes a
@@ -496,7 +497,8 @@ never sees it, and `jvmTarget` does not restrict the Java API.
   sequential batches oldest first; envelope `{"sent_at":..,"batch":[...]}` streamed with `sent_at`
   rewritten per attempt; delete after 2xx; `Sent` and `Dropped` updates; stop at the first failure;
   one request in flight.
-- Tests: each gate blocks and its release resumes; `sent_at` differs between attempts of the same
+- Tests: each gate blocks and its release resumes, including `RuntimeFlags.collecting` turned off by
+  a remote fetch in the running process (5.3); `sent_at` differs between attempts of the same
   batch; a batch is deleted only after 2xx; no two requests overlap under a burst of signals;
   `Sent` lists exactly the batch's message ids.
 
@@ -714,7 +716,7 @@ release.
 | Event Model 4 | `message_id` UUIDv7, never regenerated | 2.3, 6.3, 6.4 | 2.3: `UuidV7GeneratorTest` (all) |
 | Event Model 5 | Epoch ms, ISO dates in properties, `sent_at` per attempt | 2.3, 6.4 | 2.3: `IsoDatesTest` (all) |
 | Event Model 6 | Public classes, internal constructors, limited `copy` | 3.2 | `EventModelTest` `limited copy`, `read-only for hooks`, `safe descriptions`; `EventJavaTest.copyHasJavaOverloads` |
-| Configuration 1 | Code plus restrict-only remote, allowlist, next launch, two immediate flags | 5.3 |  |
+| Configuration 1 | Code plus restrict-only remote, allowlist, next launch, two immediate flags | 5.3, 6.3, 6.4 | 5.3: `RemoteConfigTest` `validation`, `the client` (200, 304, 404, failures, kill switch, network requests, restart); `docs/remote-config.md` |
 | Configuration 2 | One class, small groups, tuning internal | 3.1 | `ConfigValidatorTest.default values` (all), `ConfigJavaTest` |
 | Configuration 3 | Only `apiKey` required, factory validation, one instance, main process | 3.1, 6.7, 7.1 | 3.1: `ConfigValidatorTest` `api key`, `host url`, `numeric bounds`, `custom headers` |
 | Configuration 4 | Snapshot and freeze | 3.1 | `ConfigValidatorTest` `config snapshot`, `frozen config` |
@@ -746,7 +748,7 @@ release.
 | Lifecycle 6 | `Autocapture` set and defaults, `NETWORK_REQUESTS` off at once | 3.1, 5.3, 7.4, 7.6 | 3.1: `ConfigValidatorTest.default values` |
 | Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3, 6.4 |  |
 | Queue 2 | Flush triggers and suppression, no WorkManager | 6.3, 6.4, 7.4 |  |
-| Queue 3 | 30 events or 60 s, bounds, remote only raises | 3.1, 5.3 | 3.1: `ConfigValidatorTest.numeric bounds` (flush) |
+| Queue 3 | 30 events or 60 s, bounds, remote only raises | 3.1, 5.3 | 3.1: `ConfigValidatorTest.numeric bounds` (flush); 5.3: `RemoteConfigTest`.`flushing can only become less frequent` |
 | Queue 4 | 100 events / 512 KB batches, oldest first, sequential | 4.2, 6.4 | 4.2: `FileEventStoreTest` `segments` (closes at 100 events and before 512 KB) |
 | Queue 5 | 1000 events, 3 days, drop counters | 4.2, 6.6 | 4.2: `FileEventStoreTest` `capacity`, `age limit` (exactly 3 days kept) |
 | Queue 6 | No public flush policy, no pause or resume | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
@@ -790,7 +792,7 @@ release.
 | Logging 2 | Levels, default `WARN`, repeat limit, no runtime setter | 2.2 | `LogTest.repeat limit` (all), `IssueCodesTest` |
 | Logging 3 | Inline gating | 2.2 | `LogTest.level gating` (all) |
 | Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3, 6.4 | 1.1: `SourceScannerTest.println rule` (all); 2.2: `SourceScannerTest.values in log rule` (all), `LogTest.throwing logger`, `LogTest.event observer`, `LogTest.re-entrancy` (all); 3.2: `EventJavaTest.anObserverIsAJavaLambda`, `EventModelTest.safe descriptions` |
-| Logging 5 | `SDK Diagnostics` | 4.1, 6.6, 5.3 | 4.1: `DeviceStoreTest` `diagnostics counters` |
+| Logging 5 | `SDK Diagnostics` | 4.1, 6.6, 5.3 | 4.1: `DeviceStoreTest` `diagnostics counters`; 5.3: `RemoteConfigTest` `sampling`, `diagnostics follow the code switch and their own sample rate` |
 
 ## 14. Status
 
@@ -810,7 +812,7 @@ release.
 - [x] 4.2 Event store
 - [x] 5.1 HTTP transport
 - [x] 5.2 Retry policy and backoff
-- [ ] 5.3 Remote configuration
+- [x] 5.3 Remote configuration
 - [ ] 6.1 Identity and super properties
 - [ ] 6.2 Session
 - [ ] 6.3 Writer and pipeline
@@ -894,7 +896,7 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 3.3 | What the no-op instance reports | `NoOpAnalytics.isOptedOut()` is `true`, since nothing is sent (the meaning Privacy 4 gives it); `deviceId` is `""`, since there is no installation id, and an erasure request with it is plainly invalid instead of hitting a real or shared id. Asked and answered by the user. | `NoOpAnalytics` KDoc |
 | 2026-10-01 | 3.3 | Default arguments on `Analytics` | `track`, `screen` and `identify` default their map to `emptyMap()`; Kotlin compiles this into `Analytics$DefaultImpls` with synthetic `$default` helpers, which appear in the `.api` file. Java passes every argument (Public API 7). | - |
 | 2026-10-01 | 4.1 | Shapes inside `device.json` the decisions leave open | `retry`: `paused_until`, `pause_kind` (`transient`, `throttle`, `config`), `step`, `last_failure`, `batches` (segment name to failed attempts), as Retry 5 lists them. `diagnostics`: `period_start`, `last_sent_at` (epoch ms), `dropped` (reason wire name to count) and `issues` (code to count). `consent`: `null`, `granted` or `denied`. Counts saturate at `Int.MAX_VALUE`. | `DeviceStore` |
-| 2026-10-01 | 4.1 | Shape of `remote-config.json` | `{"v":1,"etag":..,"values":{..}}`; step 5.3 decides what `values` holds and may refine it. | `DeviceStore`, step 5.3 |
+| 2026-10-01 | 4.1 | Shape of `remote-config.json` | `{"v":1,"etag":..,"values":{..}}`; `values` is the response object as received (5.3). | `DeviceStore`, step 5.3 |
 | 2026-10-01 | 4.1 | What makes a store file unreadable | Not valid UTF-8, not a JSON object, a `v` other than 1, a required field missing (`device_id`, a session's `id`, `started_at`, `last_activity`) or any field of the wrong type, including an unknown `consent` or `pause_kind`. An optional field that is absent or `null` takes its default. | `StoreFields` |
 | 2026-10-01 | 4.1 | `remote-config.json` unreadable | Treated like the other stores: no cache for the process and never overwritten, so a downgrade cannot destroy it (Disk 7). | `DeviceStore` |
 | 2026-10-01 | 4.1 | Counters before `DeviceStore` is loaded | The `Log` counts through `DeviceStore.issueCounter` from the start; counts made before `load` (such as `STORE_UNREADABLE` for `device.json` itself) are kept in memory and added at `load`. | `DeviceStore` |
@@ -921,6 +923,14 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 5.2 | The clock guard at restore (Retry 5) | A stored wait is cut to the longest of its kind from now (10 minutes for B, 1 hour for C and E). The longest jittered waits (up to 15 minutes for B, 72 for E) are cut too after a restart; the next attempt then follows its own backoff. | `RetryPolicy` |
 | 2026-10-01 | 5.2 | Who logs a configuration problem | The policy logs `UPLOAD_UNAUTHORIZED`, `UPLOAD_ENDPOINT_MISSING`, `UPLOAD_TOO_LARGE`, `UPLOAD_NOT_SUPPORTED` and `TLS_FAILED`; the transport already logs redirects, blocked hosts and unexpected errors (5.1). Every code once per process (Logging 2). | `RetryPolicy` |
 | 2026-10-01 | 5.2 | Writing the retry state | The policy changes `DeviceStore` in memory; the writer persists it (6.3, 6.4), as every store write goes through the writer (Queue 1). | - |
+| 2026-10-01 | 5.3 | The JSON contract (Configuration 1 leaves it to the backend) | Flat, every key optional: `enabled`, `autocapture_off` (types to switch off, so switching on cannot even be expressed), `flush_at`, `flush_interval_ms`, `sample_rate`, `diagnostics_sample_rate`. Chosen by the user; written to `docs/remote-config.md`, pending backend confirmation. | `docs/remote-config.md` |
+| 2026-10-01 | 5.3 | How often the configuration is fetched | Once per launch, in the background. Chosen by the user. | `RemoteConfigClient` |
+| 2026-10-01 | 5.3 | An unknown key or autocapture type | Ignored at DEBUG, so keys a newer backend adds for newer SDKs never warn in older ones. A known key with an invalid value, or one that would widen the code, is ignored with `REMOTE_CONFIG_INVALID_VALUE`, once per key. Chosen by the user. | `RemoteConfig` |
+| 2026-10-01 | 5.3 | A device outside `sample_rate` | Collects nothing, like the kill switch but per device and from the next launch; the configuration is still fetched. Chosen by the user. | `RemoteConfigClient`, `RuntimeFlags` |
+| 2026-10-01 | 5.3 | Reading the configuration response | `HttpResult.Success` gains optional `body` and `etag`, filled for GET only (at most 64 KB); an upload's success body is still never read (Retry 4). For a GET a body that fails to read is an `IO` failure, since the body is the result. | `HttpTransport`, `HttpURLConnectionTransport` |
+| 2026-10-01 | 5.3 | What is saved | The response object as received, with its `ETag`, in `remote-config.json`; it is validated again at every launch against that launch's code, so a stricter app release is never widened by an old response. A 404 deletes it; any other failure keeps it. | `RemoteConfigClient`, `DeviceStore` |
+| 2026-10-01 | 5.3 | Sampling | 52 bits of SHA-256 of a purpose salt and `device_id` give a position in `[0, 1)`; `events` and `diagnostics` use different salts so they draw independently. | `Sampling` |
+| 2026-10-01 | 5.3 | The immediate flags | `RuntimeFlags` only turn off within a process; turning back on waits for the next launch. Network request capture is also off at startup when the effective configuration lacks `NETWORK_REQUESTS`, so the interceptor checks one flag (7.6). The pipeline and uploader honour `collecting` in 6.3 and 6.4. | `RuntimeFlags` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

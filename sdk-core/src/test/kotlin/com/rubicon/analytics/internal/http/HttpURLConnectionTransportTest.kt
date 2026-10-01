@@ -191,6 +191,22 @@ class HttpURLConnectionTransportTest {
         }
 
         @Test
+        fun `a GET success carries its body and ETag, an upload success neither`() {
+            server.enqueue(MockResponse().setBody("""{"flush_at":60}""").addHeader("ETag", "\"v7\""))
+            server.enqueue(MockResponse().setBody("ignored").addHeader("ETag", "\"v8\""))
+
+            assertEquals(HttpResult.Success(200, """{"flush_at":60}""", "\"v7\""), get())
+            assertEquals(HttpResult.Success(200), post())
+        }
+
+        @Test
+        fun `a GET body is read up to 64 KB`() {
+            server.enqueue(MockResponse().setBody("x".repeat(100_000)))
+
+            assertEquals(64 * 1024, (get() as HttpResult.Success).body!!.length)
+        }
+
+        @Test
         fun `a redirect is not followed and logs its target without the query`() {
             server.enqueue(MockResponse().setResponseCode(301).addHeader("Location", "https://new.example/v1/batch?token=secret"))
             server.enqueue(MockResponse())
