@@ -142,6 +142,8 @@ rules are in the root `CLAUDE.md`.
   files: deleted with WARN. No quarantine, no free-space check (Disk 5).
 - Stores (Disk 7): whole-file JSON with `"v"`, `.tmp` + fsync + rename, coalesced on the writer.
   Missing -> create; unreadable (corrupt, Direct Boot, newer `v`) -> in-memory, never overwrite.
+  `v` is the file format, not the SDK version. Evolve formats compatibly (new optional fields);
+  raising `v` is a last resort and a design discussion with the user, never part of a routine change.
 - Only the internal conversion layer (`internal/json/Json.kt`) touches `org.json`: `JSONObject.NULL`
   for null (a Kotlin null removes the key); read with typed checks, never `opt*` defaults; nothing
   may depend on key order (Serialization 1). Tests compare

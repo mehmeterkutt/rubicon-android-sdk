@@ -1,14 +1,26 @@
 package com.rubicon.analytics.testing
 
+import com.rubicon.analytics.DropReason
+import com.rubicon.analytics.internal.json.Json
+import com.rubicon.analytics.internal.log.Log
+import com.rubicon.analytics.internal.platform.Clock
+import com.rubicon.analytics.internal.storage.BatchResult
+import com.rubicon.analytics.internal.storage.DropCounter
 import com.rubicon.analytics.internal.storage.EventStore
 import com.rubicon.analytics.internal.storage.KeyValueStore
 import java.io.IOException
+import java.io.OutputStream
 import java.util.TreeMap
 
 /**
  * An [EventStore] in memory with the segment rules of Disk 1: the open segment closes at
  * [maxEventsPerSegment] events, or before an event that would take it past [maxBytesPerSegment]
- * (line plus line break, UTF-8), or when asked to.
+ * (line plus line break, UTF-8), or when asked to. [writeBatch] writes the body of Disk 3 from the
+ * stored lines as they are.
+ *
+ * The capacity, age and corruption rules are not repeated here: they belong to `FileEventStore`, and
+ * a test that needs them uses it with a temporary directory. A failed append counts `storage_error`
+ * through the [DropCounter] given to [open].
  */
 public class InMemoryEventStore(
     private val maxEventsPerSegment: Int = 100,
@@ -20,6 +32,7 @@ public class InMemoryEventStore(
     private var openBytes = 0
     private var nextIndex = 0L
     private val unreadable = mutableSetOf<Long>()
+    private var drops: DropCounter = DropCounter.NONE
 
     /** When `true`, [append] fails as a full disk would. */
     @Volatile
@@ -34,19 +47,35 @@ public class InMemoryEventStore(
     public val openSegment: List<String>
         get() = synchronized(lock) { open.toList() }
 
+    /** The lines of a closed segment, for assertions; empty when there is none. */
+    public fun segmentLines(index: Long): List<String> = synchronized(lock) { closed[index].orEmpty() }
+
+    override fun open(
+        apiKey: String,
+        clock: Clock,
+        log: Log,
+        drops: DropCounter,
+    ) {
+        this.drops = drops
+    }
+
     override val pendingCount: Int
         get() = synchronized(lock) { closed.values.sumOf { it.size } + open.size }
 
-    override fun append(line: String): Boolean =
+    override fun append(line: String): Boolean {
         synchronized(lock) {
-            if (failAppends) return false
-            val bytes = line.toByteArray(Charsets.UTF_8).size + 1
-            if (open.isNotEmpty() && openBytes + bytes > maxBytesPerSegment) closeLocked()
-            open += line
-            openBytes += bytes
-            if (open.size >= maxEventsPerSegment) closeLocked()
-            true
+            if (!failAppends) {
+                val bytes = line.toByteArray(Charsets.UTF_8).size + 1
+                if (open.isNotEmpty() && openBytes + bytes > maxBytesPerSegment) closeLocked()
+                open += line
+                openBytes += bytes
+                if (open.size >= maxEventsPerSegment) closeLocked()
+                return true
+            }
         }
+        drops.count(DropReason.STORAGE_ERROR, 1)
+        return false
+    }
 
     override fun closeOpenSegment() {
         synchronized(lock) { closeLocked() }
@@ -56,18 +85,23 @@ public class InMemoryEventStore(
         syncCount++
     }
 
+    override fun expire(): Unit = Unit
+
     override fun closedSegments(): List<Long> = synchronized(lock) { closed.keys.toList() }
 
-    override fun <T> readSegment(
+    override fun writeBatch(
         index: Long,
-        block: (Sequence<String>) -> T,
-    ): T {
+        sentAt: Long,
+        out: OutputStream,
+    ): BatchResult {
         val lines =
             synchronized(lock) {
-                if (index in unreadable) throw IOException("Segment $index is unreadable")
-                closed[index] ?: throw IOException("No segment $index")
+                if (index in unreadable) return BatchResult.Unreadable(deleted = false, cause = IOException("Segment $index is unreadable"))
+                closed[index] ?: return BatchResult.Written(emptyList())
             }
-        return block(lines.asSequence())
+        out.write(("{\"sent_at\":$sentAt,\"batch\":[" + lines.joinToString(",") + "]}").toByteArray(Charsets.UTF_8))
+        val ids = lines.map { Json.readObject(it)?.string("message_id") ?: it }
+        return BatchResult.Written(ids)
     }
 
     override fun deleteSegment(index: Long) {
@@ -77,7 +111,7 @@ public class InMemoryEventStore(
         }
     }
 
-    /** Makes [readSegment] of [index] throw, as an I/O error would (Disk 5). */
+    /** Makes [writeBatch] of [index] report it unreadable, as an I/O error would (Disk 5). */
     public fun markUnreadable(index: Long) {
         synchronized(lock) { unreadable += index }
     }

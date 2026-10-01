@@ -374,7 +374,7 @@ never sees it, and `jvmTarget` does not restrict the Java API.
   lines (half line, invalid JSON, not an object, or missing `type`, `message_id` or numeric
   `timestamp`) skipped with ERROR naming segment, line number and `message_id` only; expired lines of
   a partly expired segment skipped when building the body; pending count from counting lines at
-  startup, then kept in memory; a write error counts `storage_error`, logs WARN and the next event
+  startup, then kept in memory; a write error counts `storage_error`, logs ERROR (`STORAGE_WRITE_FAILED`, Disk 4) and the next event
   goes to a new segment (Direct Boot is not supported and ends here, Disk 2a); an unreadable segment
   retried and deleted after 3 consecutive failures (`UNREADABLE_SEGMENT`); streaming reads only.
 - Tests: every rule above; a segment never exceeds 100 events or 512 KB; index ordering survives
@@ -747,18 +747,18 @@ release.
 | Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3, 6.4 |  |
 | Queue 2 | Flush triggers and suppression, no WorkManager | 6.3, 6.4, 7.4 |  |
 | Queue 3 | 30 events or 60 s, bounds, remote only raises | 3.1, 5.3 | 3.1: `ConfigValidatorTest.numeric bounds` (flush) |
-| Queue 4 | 100 events / 512 KB batches, oldest first, sequential | 4.2, 6.4 |  |
-| Queue 5 | 1000 events, 3 days, drop counters | 4.2, 6.6 |  |
+| Queue 4 | 100 events / 512 KB batches, oldest first, sequential | 4.2, 6.4 | 4.2: `FileEventStoreTest` `segments` (closes at 100 events and before 512 KB) |
+| Queue 5 | 1000 events, 3 days, drop counters | 4.2, 6.6 | 4.2: `FileEventStoreTest` `capacity`, `age limit` (exactly 3 days kept) |
 | Queue 6 | No public flush policy, no pause or resume | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
 | Queue 7 | `flush.immediateEvents` | 3.1, 6.3 | 3.1: `ConfigValidatorTest.config snapshot` |
-| Disk 1 | Segmented append log, one segment is one batch | 4.2 |  |
+| Disk 1 | Segmented append log, one segment is one batch | 4.2 | `FileEventStoreTest` `segments`, `10 000 events are read back in order` |
 | Disk 2a | Everything under `noBackupFilesDir/rubicon/` | 4.1, 4.2, 7.1 | 4.1: `FileKeyValueStore` writes under `Platform.storageRoot`; `FileKeyValueStoreTest.files are app-private` |
-| Disk 2b | Fixed-width index from the directory | 4.2 |  |
-| Disk 2c | One directory per key, others deleted (`api_key_changed`) | 2.3, 4.2 | 2.3: `HttpDatesAndHashingTest.sha-256` (all) |
+| Disk 2b | Fixed-width index from the directory | 4.2 | `FileEventStoreTest.index order survives a restart and gaps` |
+| Disk 2c | One directory per key, others deleted (`api_key_changed`) | 2.3, 4.2 | 2.3: `HttpDatesAndHashingTest.sha-256` (all); 4.2: `FileEventStoreTest` `events of another API key are deleted and counted`, `a later format directory is never touched` |
 | Disk 2d | Main process only | 7.1, 8.1 |  |
-| Disk 3 | JSON Lines equal to the wire event, `v1` directory | 4.2, 2.4 | 2.4: `JsonTest.reading fields` (all), `JsonTest.round trip` (a line never holds a raw line break) |
-| Disk 4 | One `write()` per event, fsync points, `.tmp` recovery | 4.2, 7.4, 8.1 |  |
-| Disk 5 | Corrupt lines skipped, unreadable segments retried then deleted | 4.2 |  |
+| Disk 3 | JSON Lines equal to the wire event, `v1` directory | 4.2, 2.4 | 2.4: `JsonTest.reading fields` (all), `JsonTest.round trip` (a line never holds a raw line break); 4.2: `FileEventStoreTest` `the batch body` (byte for byte) |
+| Disk 4 | One `write()` per event, fsync points, `.tmp` recovery | 4.2, 7.4, 8.1 | 4.2: `FileEventStoreTest` `leftover open segment` (truncation at every byte), `failures` |
+| Disk 5 | Corrupt lines skipped, unreadable segments retried then deleted | 4.2 | `FileEventStoreTest` `corrupt lines`, `unknown files are deleted with a warning`, `an unreadable segment is retried and deleted after three consecutive failures` |
 | Disk 6 | No encryption, storage not replaceable | 2.1 | 2.1: `EventStore`, `KeyValueStore` are `@RubiconInternal` (opt-in error for apps); `InMemoryStoresTest` |
 | Disk 7 | Atomic person and device stores with `v` | 4.1 | `FileKeyValueStoreTest` `atomic replacement`; `PersonStoreTest` and `DeviceStoreTest` (`many updates in a row produce one write`, newer `v`) |
 | Serialization 1 | `org.json` `compileOnly`, one conversion layer | 1.1, 2.4 | 1.1: `android-json` `compileOnly` in `sdk-core`, absent from the release runtime classpath; 2.4: `JsonTest` (all), `JsonOnAndroidTest` |
@@ -807,7 +807,7 @@ release.
 - [x] 3.2 Event model and public types
 - [x] 3.3 The `Analytics` interface
 - [x] 4.1 Key-value stores
-- [ ] 4.2 Event store
+- [x] 4.2 Event store
 - [ ] 5.1 HTTP transport
 - [ ] 5.2 Retry policy and backoff
 - [ ] 5.3 Remote configuration
@@ -899,6 +899,14 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 4.1 | `remote-config.json` unreadable | Treated like the other stores: no cache for the process and never overwritten, so a downgrade cannot destroy it (Disk 7). | `DeviceStore` |
 | 2026-10-01 | 4.1 | Counters before `DeviceStore` is loaded | The `Log` counts through `DeviceStore.issueCounter` from the start; counts made before `load` (such as `STORE_UNREADABLE` for `device.json` itself) are kept in memory and added at `load`. | `DeviceStore` |
 | 2026-10-01 | 4.1 | App-private files | `FileSystem.openWrite` and `openAppend` restrict a file to its owner (`rw-------`); Android's app directories are private already. A leftover store `.tmp` is deleted on the first read of that store, which is on the writer at startup. | `FileSystem`, `FileKeyValueStore` |
+| 2026-10-01 | 4.2 | Format versions (`"v"` in stores, `events/v1/`) | Formats evolve compatibly, by adding optional fields; event lines can gain fields freely since they are sent as stored. Raising a version is a last resort, decided with the user. Startup cleanup touches only `events/v1/`, so an older SDK never deletes a newer format's events after a downgrade. | `sdk-core/CLAUDE.md` Storage |
+| 2026-10-01 | 4.2 | Encryption at rest | Disk 6 stands (no encryption). If it is ever needed, for example by an enterprise customer, it is discussed in detail with the user first, since it is the main change that would force a new format version. | - |
+| 2026-10-01 | 4.2 | Codes for drop reasons (Queue 5 logs each reason at WARN once per process) | One code per reason without one of its own, all WARN: `QUEUE_FULL`, `EVENTS_EXPIRED`, `API_KEY_CHANGED` (used from 4.2), `BACKPRESSURE`, `EVENT_OVERSIZE` (used from 6.3). `corrupt` and `storage_error` keep `CORRUPT_LINE` and `STORAGE_WRITE_FAILED`; `before_send` has `HOOK_THREW` for a throw, and a `null` result is counted, not logged. Chosen by the user over a single `EVENTS_DROPPED`. `rejected` and `retry_exhausted` get codes the same way in 5.2. | `Code`, `docs/issue-codes.md` |
+| 2026-10-01 | 4.2 | The `EventStore` interface (2.1 allowed refining it here) | `open(apiKey, clock, log, drops)` does the startup work on the writer; `writeBatch(index, sentAt, out)` streams the body into the uploader's stream and returns the message ids or `Unreadable`; `expire()` before uploads; the store counts what it drops through `DropCounter`. `Platform.eventStore` stays, so `sdk-android` builds `FileEventStore(storageRoot)` and tests pass `InMemoryEventStore`, which does not repeat the capacity, age and corruption rules. | `EventStore`, `FileEventStore` |
+| 2026-10-01 | 4.2 | Trimming granularity (Disk 1: "delete the oldest segments") | Whole oldest segments are deleted until at most 900 remain, so 800 to 900 events are left; the segment the uploader is reading is never trimmed. | `FileEventStore` |
+| 2026-10-01 | 4.2 | "Older than 3 days" | Strictly older: an event exactly 3 days old is kept, one millisecond older is expired. A timestamp in the future is never expired. | `FileEventStore` |
+| 2026-10-01 | 4.2 | When skipped lines are counted | A segment is read again on every retry, so corrupt and expired lines skipped by its last read are counted once, when the segment is deleted; corrupt lines are logged on the first read of a segment in a process. An unreadable segment counts one `UNREADABLE_SEGMENT` issue and no dropped events (Disk 5). | `FileEventStore` |
+| 2026-10-01 | 4.2 | A failed write | The lines before it stay as a closed segment (the file is cut back to them), the event counts `storage_error`, and the next event opens a new segment; a segment that cannot be closed stays `.tmp` and is recovered by the next process. | `FileEventStore` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

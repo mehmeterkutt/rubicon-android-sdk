@@ -96,6 +96,23 @@ public enum class Code {
     /** WARN. An unknown file in the events directory was deleted. */
     UNKNOWN_FILE,
 
+    // Dropped events: one code per reason that has no code of its own (Queue 5)
+
+    /** WARN. More than 1000 events were pending; the oldest were dropped (`queue_full`). */
+    QUEUE_FULL,
+
+    /** WARN. Events older than 3 days were deleted unsent (`expired`). */
+    EVENTS_EXPIRED,
+
+    /** WARN. Events tracked with another API key were deleted (`api_key_changed`). */
+    API_KEY_CHANGED,
+
+    /** WARN. The write channel was full; the event was dropped (`backpressure`). */
+    BACKPRESSURE,
+
+    /** WARN. A serialized event was larger than 32 KB; it was dropped (`oversize`). */
+    EVENT_OVERSIZE,
+
     // Upload
 
     /** WARN. The host resolves to a local address, as ad blockers and private DNS do. */

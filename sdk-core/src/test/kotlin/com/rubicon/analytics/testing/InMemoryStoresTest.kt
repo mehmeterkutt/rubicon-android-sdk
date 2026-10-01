@@ -1,5 +1,9 @@
 package com.rubicon.analytics.testing
 
+import com.rubicon.analytics.DropReason
+import com.rubicon.analytics.LogLevel
+import com.rubicon.analytics.internal.log.Log
+import com.rubicon.analytics.internal.storage.BatchResult
 import com.rubicon.analytics.internal.storage.KeyValueStore
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -8,13 +12,12 @@ import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
-import java.io.IOException
+import java.io.ByteArrayOutputStream
 
 class InMemoryStoresTest {
     @Nested
     inner class `event store` {
-        private fun InMemoryEventStore.lines(index: Long) = readSegment(index) { it.toList() }
+        private fun InMemoryEventStore.lines(index: Long) = segmentLines(index)
 
         @Test
         fun `closes a segment at the event limit`() {
@@ -90,15 +93,22 @@ class InMemoryStoresTest {
         }
 
         @Test
-        fun `an unreadable or missing segment throws IOException`() {
-            val store = InMemoryEventStore(maxEventsPerSegment = 1)
-            store.append("a")
-            store.markUnreadable(0)
+        fun `writes the body of a segment and reports an unreadable one`() {
+            val store = InMemoryEventStore(maxEventsPerSegment = 2)
+            store.append("""{"message_id":"a"}""")
+            store.append("""{"message_id":"b"}""")
+            store.append("c")
+            store.closeOpenSegment()
+            store.markUnreadable(1)
+            val out = ByteArrayOutputStream()
 
-            assertThrows<IOException> { store.lines(0) }
-            assertThrows<IOException> { store.lines(5) }
-            store.deleteSegment(0)
-            assertEquals(emptyList<Long>(), store.closedSegments())
+            val written = store.writeBatch(0, 7, out) as BatchResult.Written
+
+            assertEquals("""{"sent_at":7,"batch":[{"message_id":"a"},{"message_id":"b"}]}""", out.toString("UTF-8"))
+            assertEquals(listOf("a", "b"), written.messageIds)
+            assertInstanceOf(BatchResult.Unreadable::class.java, store.writeBatch(1, 7, ByteArrayOutputStream()))
+            store.deleteSegment(1)
+            assertEquals(listOf(0L), store.closedSegments())
         }
 
         @Test
@@ -106,8 +116,12 @@ class InMemoryStoresTest {
             val store = InMemoryEventStore()
             store.failAppends = true
 
+            val counted = mutableListOf<DropReason>()
+            store.open("key", FakeClock(), Log(LogLevel.OFF, null, RecordingLogger())) { reason, _ -> counted += reason }
+
             assertFalse(store.append("a"))
             assertEquals(0, store.pendingCount)
+            assertEquals(listOf(DropReason.STORAGE_ERROR), counted)
 
             store.failAppends = false
             assertTrue(store.append("a"))

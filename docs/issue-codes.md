@@ -63,6 +63,19 @@ section 15).
 | `UNREADABLE_SEGMENT` | ERROR | A segment could not be read; it is deleted after three consecutive failures. | Disk 5 |
 | `UNKNOWN_FILE` | WARN | A file in the events directory that does not match the naming scheme was deleted. | Disk 5 |
 
+## Dropped events
+
+Each drop reason without a code of its own above (`CORRUPT_LINE`, `STORAGE_WRITE_FAILED`) or elsewhere
+(`HOOK_THREW`) has one here; the event counts per reason are in `dropped` (Queue 5, Logging 5).
+
+| Code | Level | Meaning | Decision |
+|---|---|---|---|
+| `QUEUE_FULL` | WARN | More than 1000 events were pending; the oldest were dropped (`queue_full`). | Queue 5 |
+| `EVENTS_EXPIRED` | WARN | Events older than 3 days were deleted unsent (`expired`). | Queue 5 |
+| `API_KEY_CHANGED` | WARN | Events tracked with another API key were deleted at startup (`api_key_changed`). | Disk 2c |
+| `BACKPRESSURE` | WARN | The write channel was full and an event was dropped (`backpressure`). | Queue 1 |
+| `EVENT_OVERSIZE` | WARN | A serialized event was larger than 32 KB and was dropped (`oversize`). | Serialization 3 |
+
 ## Upload
 
 | Code | Level | Meaning | Decision |
