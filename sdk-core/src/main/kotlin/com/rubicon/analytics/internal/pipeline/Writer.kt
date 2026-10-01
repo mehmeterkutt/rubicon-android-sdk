@@ -7,7 +7,9 @@ import com.rubicon.analytics.EventUpdate
 import com.rubicon.analytics.ScreenEvent
 import com.rubicon.analytics.TrackEvent
 import com.rubicon.analytics.internal.config.ConfigSnapshot
+import com.rubicon.analytics.internal.identity.IdentifyTicket
 import com.rubicon.analytics.internal.identity.Identity
+import com.rubicon.analytics.internal.identity.IdentityRef
 import com.rubicon.analytics.internal.identity.IdentitySnapshot
 import com.rubicon.analytics.internal.log.Code
 import com.rubicon.analytics.internal.log.Log
@@ -28,6 +30,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 
 /** What the calling threads and the platform ask of the writer, in order (Queue 1). */
 internal sealed interface WriteMessage {
@@ -75,7 +78,8 @@ internal sealed interface WriteMessage {
  *   coming back while events are pending, `flush()` and immediate events. No startup flush and no
  *   periodic timer. A flush closes the open segment and signals the uploader through the conflated
  *   [uploadSignal].
- * - The stores are written after every message when something changed, so changes coalesce.
+ * - The stores are written when no message is waiting, at least every [PERSIST_EVERY] messages, and
+ *   only when something changed, so changes coalesce (Disk 7).
  * - An unexpected exception while handling a message is logged and the writer goes on; in debug it
  *   is thrown.
  */
@@ -106,7 +110,16 @@ internal class Writer(
     private lateinit var pipeline: EventPipeline
     private var sendsDiagnostics = true
 
+    // Messages accepted into the channel and messages handled, for isIdle.
+    private val sentMessages = AtomicLong()
+    private val handledMessages = AtomicLong()
+
+    /** No message waiting or being handled; for `flushBlocking` (tests and shutdown). */
+    val isIdle: Boolean
+        get() = started.isCompleted && handledMessages.get() == sentMessages.get()
+
     // Writer only.
+    private var messagesSincePersist = 0
     private var appendedSinceFlush = 0
     private var interval: Job? = null
 
@@ -134,12 +147,25 @@ internal class Writer(
             } finally {
                 started.complete(Unit)
             }
-            for (message in channel) guarded { handle(message) }
+            for (message in channel) {
+                try {
+                    guarded { handle(message) }
+                    // Changes coalesce (Disk 7): the stores are written when no message is waiting,
+                    // and at least every PERSIST_EVERY messages under a steady load.
+                    messagesSincePersist++
+                    if (handledMessages.get() + 1 >= sentMessages.get() || messagesSincePersist >= PERSIST_EVERY) {
+                        messagesSincePersist = 0
+                        guarded { persistStores() }
+                    }
+                } finally {
+                    handledMessages.incrementAndGet()
+                }
+            }
         }
 
     /** From any thread; never blocks. Returns `false` when the event was dropped as `backpressure`. */
     fun enqueue(event: CapturedEvent): Boolean {
-        if (channel.trySend(WriteMessage.Enqueue(event)).isSuccess) return true
+        if (offer(WriteMessage.Enqueue(event))) return true
         deviceStore.countDropped(DropReason.BACKPRESSURE)
         log.warn(Code.BACKPRESSURE) { "Events arrive faster than they can be stored; one was dropped" }
         observe(EventUpdate.Dropped(listOf(event.messageId), DropReason.BACKPRESSURE))
@@ -170,7 +196,15 @@ internal class Writer(
     }
 
     private fun send(message: WriteMessage) {
-        if (channel.trySend(message).isFailure) log.debug { "The write channel is full; ${message.javaClass.simpleName} was skipped" }
+        if (!offer(message)) log.debug { "The write channel is full; ${message.javaClass.simpleName} was skipped" }
+    }
+
+    private fun offer(message: WriteMessage): Boolean {
+        // Counted first, so the message is never handled before it is counted.
+        sentMessages.incrementAndGet()
+        if (channel.trySend(message).isSuccess) return true
+        sentMessages.decrementAndGet()
+        return false
     }
 
     private fun startUp() {
@@ -209,7 +243,7 @@ internal class Writer(
         when (message) {
             // Nothing new while opted out; events that waited for the stored choice are discarded
             // unwritten and uncounted (Privacy 1, 2).
-            is WriteMessage.Enqueue -> if (collecting) append(pipeline.process(message.event), message.event.skipsHooks)
+            is WriteMessage.Enqueue -> if (collecting) resolve(message.event)?.let { append(pipeline.process(it), it.skipsHooks) }
             WriteMessage.Flush -> flushNow("requested")
             WriteMessage.Persist -> Unit
             WriteMessage.Foreground -> appendSessionEvents(sessions.onForeground())
@@ -223,7 +257,22 @@ internal class Writer(
             is WriteMessage.ConsentChanged -> onConsentChanged(message.from, message.to)
             WriteMessage.ClearLocalData -> clearEvents()
         }
-        persistStores()
+    }
+
+    // An identify is sent only if its ticket says so, with the traits and identity of that moment.
+    private fun resolve(event: CapturedEvent): CapturedEvent? {
+        val ticket = event.ticket ?: return event
+        val decision = ticket.decision as? IdentifyTicket.Decision.SendEvent ?: return null
+        return CapturedEvent(
+            event.type,
+            event.name,
+            decision.traits,
+            event.source,
+            event.messageId,
+            event.timestamp,
+            IdentityRef().apply { value = decision.identity },
+            event.callTime,
+        )
     }
 
     private val collecting: Boolean
@@ -374,6 +423,9 @@ internal class Writer(
     private companion object {
         /** Queue 1: the write channel holds at most this many messages. */
         const val CHANNEL_CAPACITY = 1000
+
+        /** Under a steady load the stores are still written at least this often. */
+        const val PERSIST_EVERY = 100
 
         fun nameOf(result: PipelineResult.Accepted): String? =
             when (val event = result.event) {

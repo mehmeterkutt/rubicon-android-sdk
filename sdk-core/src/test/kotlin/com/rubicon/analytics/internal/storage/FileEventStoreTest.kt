@@ -452,6 +452,22 @@ class FileEventStoreTest {
         }
 
         @Test
+        fun `a batch on its way to the server is never trimmed`() {
+            val store = store()
+            repeat(1000) { store.append(line("e$it")) }
+            // The uploader has read the oldest batch and is sending it.
+            store.writeBatch(0, SENT_AT, ByteArrayOutputStream())
+
+            store.append(line("e1000"))
+
+            assertTrue(0L in store.closedSegments())
+            assertEquals(listOf(0L, 3L), store.closedSegments().take(2))
+            store.deleteSegment(0)
+            store.append(line("e1001"))
+            assertFalse(0L in store.closedSegments())
+        }
+
+        @Test
         fun `the capacity is enforced at startup too`() {
             dir.mkdirs()
             repeat(12) { segment ->
