@@ -1,3 +1,88 @@
+public final class com/rubicon/analytics/AnalyticsConfig {
+	public static final field Companion Lcom/rubicon/analytics/AnalyticsConfig$Companion;
+	public static final field DEFAULT_HOST Ljava/lang/String;
+	public fun <init> (Ljava/lang/String;)V
+	public final fun getApiKey ()Ljava/lang/String;
+	public final fun getAutocapture ()Lcom/rubicon/analytics/AutocaptureConfig;
+	public final fun getContext ()Lcom/rubicon/analytics/ContextConfig;
+	public final fun getDebug ()Z
+	public final fun getFlush ()Lcom/rubicon/analytics/FlushConfig;
+	public final fun getHost ()Ljava/lang/String;
+	public final fun getLogging ()Lcom/rubicon/analytics/LoggingConfig;
+	public final fun getNetwork ()Lcom/rubicon/analytics/NetworkConfig;
+	public final fun getPrivacy ()Lcom/rubicon/analytics/PrivacyConfig;
+	public final fun getSession ()Lcom/rubicon/analytics/SessionConfig;
+	public final fun setDebug (Z)V
+	public final fun setHost (Ljava/lang/String;)V
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/rubicon/analytics/AnalyticsConfig$Companion {
+}
+
+public final class com/rubicon/analytics/Autocapture : java/lang/Enum {
+	public static final field APP_LIFECYCLE Lcom/rubicon/analytics/Autocapture;
+	public static final field DEEP_LINKS Lcom/rubicon/analytics/Autocapture;
+	public static final field INSTALL_UPDATE Lcom/rubicon/analytics/Autocapture;
+	public static final field NETWORK_REQUESTS Lcom/rubicon/analytics/Autocapture;
+	public static final field SCREEN_VIEWS Lcom/rubicon/analytics/Autocapture;
+	public static final field SESSIONS Lcom/rubicon/analytics/Autocapture;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/rubicon/analytics/Autocapture;
+	public static fun values ()[Lcom/rubicon/analytics/Autocapture;
+}
+
+public final class com/rubicon/analytics/AutocaptureConfig {
+	public final fun getEnabled ()Ljava/util/Set;
+	public final fun setEnabled (Ljava/util/Set;)V
+}
+
+public final class com/rubicon/analytics/Consent : java/lang/Enum {
+	public static final field GRANTED Lcom/rubicon/analytics/Consent;
+	public static final field PENDING Lcom/rubicon/analytics/Consent;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/rubicon/analytics/Consent;
+	public static fun values ()[Lcom/rubicon/analytics/Consent;
+}
+
+public final class com/rubicon/analytics/ContextConfig {
+	public final fun getDisabledFields ()Ljava/util/Set;
+	public final fun setDisabledFields (Ljava/util/Set;)V
+}
+
+public final class com/rubicon/analytics/ContextField : java/lang/Enum {
+	public static final field APP_BUILD Lcom/rubicon/analytics/ContextField;
+	public static final field APP_NAME Lcom/rubicon/analytics/ContextField;
+	public static final field APP_NAMESPACE Lcom/rubicon/analytics/ContextField;
+	public static final field APP_VERSION Lcom/rubicon/analytics/ContextField;
+	public static final field DEVICE_IS_EMULATOR Lcom/rubicon/analytics/ContextField;
+	public static final field DEVICE_MANUFACTURER Lcom/rubicon/analytics/ContextField;
+	public static final field DEVICE_MODEL Lcom/rubicon/analytics/ContextField;
+	public static final field DEVICE_TYPE Lcom/rubicon/analytics/ContextField;
+	public static final field LOCALE Lcom/rubicon/analytics/ContextField;
+	public static final field NETWORK_CARRIER Lcom/rubicon/analytics/ContextField;
+	public static final field NETWORK_TYPE Lcom/rubicon/analytics/ContextField;
+	public static final field OS_API_LEVEL Lcom/rubicon/analytics/ContextField;
+	public static final field OS_NAME Lcom/rubicon/analytics/ContextField;
+	public static final field OS_VERSION Lcom/rubicon/analytics/ContextField;
+	public static final field SCREEN_DENSITY Lcom/rubicon/analytics/ContextField;
+	public static final field SCREEN_HEIGHT Lcom/rubicon/analytics/ContextField;
+	public static final field SCREEN_WIDTH Lcom/rubicon/analytics/ContextField;
+	public static final field TIMEZONE Lcom/rubicon/analytics/ContextField;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/rubicon/analytics/ContextField;
+	public static fun values ()[Lcom/rubicon/analytics/ContextField;
+}
+
+public final class com/rubicon/analytics/FlushConfig {
+	public final fun getAt ()I
+	public final fun getImmediateEvents ()Ljava/util/Set;
+	public final fun getIntervalMs ()J
+	public final fun setAt (I)V
+	public final fun setImmediateEvents (Ljava/util/Set;)V
+	public final fun setIntervalMs (J)V
+}
+
 public final class com/rubicon/analytics/LogLevel : java/lang/Enum {
 	public static final field DEBUG Lcom/rubicon/analytics/LogLevel;
 	public static final field ERROR Lcom/rubicon/analytics/LogLevel;
@@ -9,10 +94,36 @@ public final class com/rubicon/analytics/LogLevel : java/lang/Enum {
 	public static fun values ()[Lcom/rubicon/analytics/LogLevel;
 }
 
+public final class com/rubicon/analytics/LoggingConfig {
+	public final fun getLevel ()Lcom/rubicon/analytics/LogLevel;
+	public final fun getLogger ()Lcom/rubicon/analytics/RubiconLogger;
+	public final fun getSendDiagnostics ()Z
+	public final fun setLevel (Lcom/rubicon/analytics/LogLevel;)V
+	public final fun setLogger (Lcom/rubicon/analytics/RubiconLogger;)V
+	public final fun setSendDiagnostics (Z)V
+}
+
+public final class com/rubicon/analytics/NetworkConfig {
+	public final fun getHeaders ()Ljava/util/Map;
+	public final fun setHeaders (Ljava/util/Map;)V
+}
+
+public final class com/rubicon/analytics/PrivacyConfig {
+	public final fun getDefaultConsent ()Lcom/rubicon/analytics/Consent;
+	public final fun getPersistConsent ()Z
+	public final fun setDefaultConsent (Lcom/rubicon/analytics/Consent;)V
+	public final fun setPersistConsent (Z)V
+}
+
 public abstract interface annotation class com/rubicon/analytics/RubiconInternal : java/lang/annotation/Annotation {
 }
 
 public abstract interface class com/rubicon/analytics/RubiconLogger {
 	public abstract fun log (Lcom/rubicon/analytics/LogLevel;Ljava/lang/String;Ljava/lang/Throwable;)V
+}
+
+public final class com/rubicon/analytics/SessionConfig {
+	public final fun getBackgroundTimeoutMs ()J
+	public final fun setBackgroundTimeoutMs (J)V
 }
 
