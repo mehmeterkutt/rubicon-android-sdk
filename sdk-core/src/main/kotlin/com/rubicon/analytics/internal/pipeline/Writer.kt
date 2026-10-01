@@ -13,6 +13,8 @@ import com.rubicon.analytics.internal.log.Log
 import com.rubicon.analytics.internal.platform.LifecycleSource
 import com.rubicon.analytics.internal.platform.NetworkMonitor
 import com.rubicon.analytics.internal.platform.Platform
+import com.rubicon.analytics.internal.privacy.ConsentController
+import com.rubicon.analytics.internal.privacy.ConsentState
 import com.rubicon.analytics.internal.remote.RemoteConfigClient
 import com.rubicon.analytics.internal.remote.RuntimeFlags
 import com.rubicon.analytics.internal.session.SessionEvent
@@ -48,6 +50,15 @@ internal sealed interface WriteMessage {
     class PersonCleared(
         val previous: IdentitySnapshot,
     ) : WriteMessage
+
+    /** `optOut()` or `optIn()` changed the state (Privacy 1, 4). */
+    class ConsentChanged(
+        val from: ConsentState,
+        val to: ConsentState,
+    ) : WriteMessage
+
+    /** `clearLocalData()`: every event tracked before it is deleted (Privacy 3). */
+    object ClearLocalData : WriteMessage
 }
 
 /**
@@ -74,6 +85,7 @@ internal class Writer(
     private val deviceStore: DeviceStore,
     private val personStore: PersonStore,
     private val identity: Identity,
+    private val consent: ConsentController,
     private val remote: RemoteConfigClient,
     private val flags: RuntimeFlags,
     private val newId: () -> String,
@@ -145,6 +157,17 @@ internal class Writer(
         send(WriteMessage.PersonCleared(previous))
     }
 
+    fun consentChanged(
+        from: ConsentState,
+        to: ConsentState,
+    ) {
+        send(WriteMessage.ConsentChanged(from, to))
+    }
+
+    fun clearLocalData() {
+        send(WriteMessage.ClearLocalData)
+    }
+
     private fun send(message: WriteMessage) {
         if (channel.trySend(message).isFailure) log.debug { "The write channel is full; ${message.javaClass.simpleName} was skipped" }
     }
@@ -152,6 +175,7 @@ internal class Writer(
     private fun startUp() {
         deviceStore.load()
         personStore.load()
+        consent.load()
         identity.load()
         val effective = remote.startup()
         snapshot = effective.snapshot
@@ -182,7 +206,9 @@ internal class Writer(
 
     private fun handle(message: WriteMessage) {
         when (message) {
-            is WriteMessage.Enqueue -> if (flags.collecting) append(pipeline.process(message.event), message.event.skipsHooks)
+            // Nothing new while opted out; events that waited for the stored choice are discarded
+            // unwritten and uncounted (Privacy 1, 2).
+            is WriteMessage.Enqueue -> if (collecting) append(pipeline.process(message.event), message.event.skipsHooks)
             WriteMessage.Flush -> flushNow("requested")
             WriteMessage.Persist -> Unit
             WriteMessage.Foreground -> appendSessionEvents(sessions.onForeground())
@@ -193,12 +219,41 @@ internal class Writer(
             }
             WriteMessage.NetworkRegained -> if (platform.eventStore.pendingCount > 0) flushNow("network regained")
             is WriteMessage.PersonCleared -> appendSessionEvents(sessions.onPersonCleared(message.previous))
+            is WriteMessage.ConsentChanged -> onConsentChanged(message.from, message.to)
+            WriteMessage.ClearLocalData -> clearEvents()
         }
         persistStores()
     }
 
+    private val collecting: Boolean
+        get() = flags.collecting && consent.state != ConsentState.DENIED
+
+    private fun onConsentChanged(
+        from: ConsentState,
+        to: ConsentState,
+    ) {
+        when {
+            to == ConsentState.DENIED -> {
+                // The open session ends without an event (Privacy 1). Events written while consent
+                // was pending were collected without it and go, uncounted (Privacy 4).
+                sessions.endSilently()
+                if (from == ConsentState.PENDING) clearEvents()
+            }
+            from == ConsentState.PENDING -> flushNow("consent granted")
+        }
+    }
+
+    // Deleted on purpose: not a loss, so not counted (Privacy 3, 4).
+    private fun clearEvents() {
+        sessions.endSilently()
+        interval?.cancel()
+        interval = null
+        appendedSinceFlush = 0
+        platform.eventStore.clear()
+    }
+
     private fun appendSessionEvents(events: List<SessionEvent>) {
-        if (events.isEmpty() || !flags.collecting) return
+        if (events.isEmpty() || !collecting) return
         val current = checkNotNull(identity.snapshot().value)
         append(
             pipeline.processSessionEvents(events, current, platform.contextProvider.callTimeValues(snapshot.disabledFields)),

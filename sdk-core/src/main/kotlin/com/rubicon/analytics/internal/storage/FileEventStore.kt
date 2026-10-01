@@ -209,6 +209,34 @@ public class FileEventStore(
         }
     }
 
+    override fun clear() {
+        openSink?.let {
+            try {
+                it.close()
+            } catch (e: IOException) {
+                log.debug { "Could not close the open segment: ${e.javaClass.simpleName}" }
+            }
+        }
+        resetOpen()
+        val deleted =
+            synchronized(lock) {
+                val indexes = closed.keys.toList()
+                closed.clear()
+                total = 0
+                indexes
+            }
+        readFailures.clear()
+        skipped.clear()
+        corruptReported.clear()
+        // Every file of this key, the open segment included; indexes keep growing.
+        try {
+            for (file in fileSystem.list(dir)) deleteQuietly(file)
+        } catch (e: IOException) {
+            log.debug { "Could not list the event directory: ${e.javaClass.simpleName}" }
+        }
+        log.debug { "Deleted ${deleted.size} segments and the open one" }
+    }
+
     override fun deleteSegment(index: Long) {
         val count =
             synchronized(lock) {

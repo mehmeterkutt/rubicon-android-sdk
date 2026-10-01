@@ -3,8 +3,10 @@ package com.rubicon.analytics.internal.identity
 import com.rubicon.analytics.internal.log.Code
 import com.rubicon.analytics.internal.log.Log
 import com.rubicon.analytics.internal.store.DeviceStore
+import com.rubicon.analytics.internal.store.DiagnosticsState
 import com.rubicon.analytics.internal.store.PersonState
 import com.rubicon.analytics.internal.store.PersonStore
+import com.rubicon.analytics.internal.store.RetryState
 import com.rubicon.analytics.internal.validation.PropertyNormalizer
 import com.rubicon.analytics.internal.validation.PropertyProblem
 
@@ -127,6 +129,20 @@ internal class Identity(
     fun reset() {
         whenLoaded {
             clearPerson()
+            persist()
+        }
+    }
+
+    /**
+     * The identity part of `clearLocalData()` (Privacy 3): the person's state is cleared and the
+     * device gets [newDeviceId], without retry state or drop counters; consent, the last version and
+     * build, and the remote configuration stay. No event, no `Session Ended`. Later calls on this
+     * thread see the new identity at once; the writer deletes the queue and the session.
+     */
+    fun clearLocalData(newDeviceId: String) {
+        whenLoaded {
+            personStore.update { PersonState.ANONYMOUS }
+            deviceStore.update { it.copy(deviceId = newDeviceId, retry = RetryState.NONE, diagnostics = DiagnosticsState.EMPTY) }
             persist()
         }
     }

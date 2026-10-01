@@ -66,6 +66,13 @@ public interface EventStore {
     ): BatchResult
 
     /**
+     * Deletes every pending event, closed segments and the open one, without counting them: for
+     * `clearLocalData()` and for waiting events when a pending consent turns into an opt-out
+     * (Privacy 3, 4). An upload already reading a segment may still complete.
+     */
+    public fun clear()
+
+    /**
      * Deletes a closed segment after the server acknowledged it or when it is dropped. The corrupt and
      * expired lines its last [writeBatch] skipped are counted now, once.
      */

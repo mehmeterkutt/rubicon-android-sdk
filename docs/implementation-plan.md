@@ -740,7 +740,7 @@ release.
 | Identity 2 | Implicit merge: both ids on every event | 3.2, 6.1 | 3.2: `EventModelTest.golden files.an anonymous user is sent as a null user id`; 6.1: `IdentityTest` (every snapshot carries both ids) |
 | Identity 3 | One `identify`, set-only traits never stored | 6.1 | `IdentityTest` `identify rules`, `invalid user ids` |
 | Identity 4 | Different id means person reset, then identify | 6.1, 6.2 | 6.1: `IdentityTest`.`a different id clears the person's state first` |
-| Identity 5 | `reset` clears person data only, no event | 4.1, 6.1 | 4.1: `PersonStoreTest.person json has exactly the decided keys`, `DeviceStoreTest.device json has exactly the decided keys`; 6.1: `IdentityTest`.`reset clears user and all super properties`; `remote config json has exactly the decided keys` |
+| Identity 5 | `reset` clears person data only, no event | 4.1, 6.1, 6.5 | 4.1: `PersonStoreTest.person json has exactly the decided keys`, `DeviceStoreTest.device json has exactly the decided keys`; 6.1: `IdentityTest`.`reset clears user and all super properties`; `remote config json has exactly the decided keys`; 6.5: `PrivacyTest`.`deletes events and the person, renews the device id, keeps consent, version and remote config` |
 | Identity 6 | No alias | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
 | Context 1 | Internal `ContextProvider`, `ContextStep`, nothing on the main thread | 2.1, 6.3, 7.3 |  |
 | Context 2 | Cached and signal-refreshed, captured at call time, carrier of the data SIM | 6.3a, 7.2, 7.3 | 6.3a: `EventPipelineTest`.`static context is read once, on first need` |
@@ -794,10 +794,10 @@ release.
 | Retry 4 | 413 as configuration problem, server answers 200 | 5.2 | `RetryPolicyTest`.`status codes` (413 is CONFIG); success bodies are never read (5.1) |
 | Retry 5 | Pipeline wait and per-segment attempts persisted, clock guard | 4.1, 5.2, 6.4 | 4.1: `DeviceStoreTest.the state and the cache read back as written` (retry object); 5.2: `RetryPolicyTest` `persistence` (restart, clock moved back by a day); 6.4: `UploaderTest`.`retry state changes are handed to the writer` |
 | Retry 6 | One default-network callback, `INTERNET` without `VALIDATED` | 7.2 |  |
-| Privacy 1 | `optOut` stops new events, queue still sends | 6.5, 7.6 |  |
-| Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3b, 6.5 | 4.1: `DeviceStoreTest.consent is null, granted or denied`; 6.3b: `WriterTest`.`the stores are loaded and written by the writer` |
-| Privacy 3 | `clearLocalData`, read-only `deviceId` | 6.5 |  |
-| Privacy 4 | `Consent` `GRANTED`/`PENDING` | 3.1, 6.5 | 3.1: `ConfigValidatorTest.default values` |
+| Privacy 1 | `optOut` stops new events, queue still sends | 6.5, 7.6 | 6.5: `PrivacyTest` `opting out` |
+| Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3b, 6.5 | 4.1: `DeviceStoreTest.consent is null, granted or denied`; 6.3b: `WriterTest`.`the stores are loaded and written by the writer`; 6.5: `PrivacyTest` `the starting state` (stored choice wins, `persistConsent`, early `isOptedOut`, calls before load) |
+| Privacy 3 | `clearLocalData`, read-only `deviceId` | 6.5 | 6.5: `PrivacyTest` `clearing local data` |
+| Privacy 4 | `Consent` `GRANTED`/`PENDING` | 3.1, 6.5 | 3.1: `ConfigValidatorTest.default values`; 6.5: `PrivacyTest` `pending consent`, `PENDING is opted out, meaning nothing is sent now` |
 | Privacy 5a | No field presets, checklist in the guide | 8.5 |  |
 | Privacy 5b | Deep links collect `utm_*` only | 7.5 |  |
 | Privacy 5c | Network capture without headers or bodies, masked ids | 7.6 |  |
@@ -832,7 +832,7 @@ release.
 - [x] 6.3a Event pipeline
 - [x] 6.3b Writer
 - [x] 6.4 Uploader
-- [ ] 6.5 Privacy
+- [x] 6.5 Privacy
 - [ ] 6.6 SDK Diagnostics
 - [ ] 6.7 `DefaultAnalytics` and the core factory
 - [ ] 7.1 Factory and Android platform
@@ -968,6 +968,10 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 6.4 | Startup order of the uploader | It waits for the writer's startup (stores loaded), restores the retry state and fetches the remote configuration if the network is there. It sends nothing until a flush trigger fires: no startup upload (Queue 2); leftovers go with the interval the writer starts for them. | `Uploader`, `Writer.started` |
 | 2026-10-01 | 6.4 | The consent gate | `uploadsAllowed`, `true` until step 6.5 wires opted out and pending to it. | Step 6.5 |
 | 2026-10-01 | 6.4 | A segment that cannot be read | Skipped for the rest of the drain, so the next one is tried; the store deletes it after three failures (Disk 5). A segment with nothing left to send is deleted without a request. | `Uploader` |
+| 2026-10-01 | 6.5 | Consent as a state | `GRANTED`, `PENDING` or `DENIED` (opted out), from `defaultConsent` or, with `persistConsent`, the stored choice. `optOut()` and `optIn()` change it in memory at once and tell the writer; calls before the stored choice is known keep their order and apply once it is, at the writer's load or at an early `isOptedOut()`. | `ConsentController` |
+| 2026-10-01 | 6.5 | The upload gate | Closed only while `PENDING`. After an opt-out, events queued with consent are still sent (Privacy 1); from `PENDING`, `optOut()` deletes every pending event first, since all of them were collected without consent (Privacy 4). Opting in from `PENDING` flushes; from an opt-out it only resumes collection. | `ConsentController.allowsUploads`, `Writer` |
+| 2026-10-01 | 6.5 | `clearLocalData()` in two parts | The identity part runs on the calling thread like `reset()`, so a later call on that thread already carries the new device id; the writer then deletes the queue, uncounted, and ends the session silently. An upload already reading a segment may still complete, and a running retry wait in the uploader runs out on its own. | `Identity.clearLocalData`, `Writer` |
+| 2026-10-01 | 6.5 | Deleting on purpose | `EventStore.clear()` deletes every pending event, the open segment included, without counting: for `clearLocalData()` and for a pending consent turned into an opt-out. | `EventStore` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |
