@@ -149,6 +149,7 @@ internal class Writer(
             }
             for (message in channel) {
                 try {
+                    guarded { platform.contextProvider.refresh(snapshot.disabledFields) }
                     guarded { handle(message) }
                     // Changes coalesce (Disk 7): the stores are written when no message is waiting,
                     // and at least every PERSIST_EVERY messages under a steady load.
@@ -216,6 +217,9 @@ internal class Writer(
         snapshot = effective.snapshot
         sendsDiagnostics = effective.sendsDiagnostics
         platform.eventStore.open(snapshot.apiKey, platform.clock, log) { reason, count -> deviceStore.countDropped(reason, count) }
+        // The network first: the context cache takes the network type from it.
+        platform.networkMonitor.start(log)
+        platform.contextProvider.refresh(snapshot.disabledFields)
         sessions =
             SessionManager(
                 personStore,
@@ -233,7 +237,6 @@ internal class Writer(
         appendedSinceFlush = platform.eventStore.pendingCount
         if (appendedSinceFlush > 0) startInterval()
         platform.lifecycleSource.addListener(lifecycleListener)
-        platform.networkMonitor.start(log)
         platform.networkMonitor.addListener(networkListener)
         if (platform.lifecycleSource.isForeground) appendSessionEvents(sessions.onForeground())
         persistStores()

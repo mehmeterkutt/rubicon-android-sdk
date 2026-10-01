@@ -87,6 +87,56 @@ class WriterTest {
     }
 
     @Nested
+    inner class `context cache` {
+        @Test
+        fun `is refreshed after the network monitor starts, before the first event and before each message`() =
+            writerTest { h ->
+                h.writer.start()
+                runCurrent()
+
+                assertEquals(1, h.test.networkMonitor.starts)
+                assertEquals(1, h.test.contextProvider.refreshes)
+
+                h.track()
+                h.track()
+                runCurrent()
+
+                assertEquals(3, h.test.contextProvider.refreshes)
+            }
+
+        @Test
+        fun `an event captured before the cache was ready gets the values when it is written`() =
+            writerTest { h ->
+                h.test.contextProvider.pendingUntilRefresh = true
+                h.test.contextProvider.callTimeValues = CallTimeValues(locale = "tr-TR", timezone = "Europe/Istanbul")
+                val captured = h.test.contextProvider.callTimeValues(emptySet())
+                assertTrue(captured.pending)
+
+                h.track(callTime = captured)
+                h.writer.start()
+                runCurrent()
+
+                val context = Json.parseToJsonElement(h.lines().last()).jsonObject["context"]!!.jsonObject
+                assertEquals("tr-TR", context["locale"]!!.jsonPrimitive.content)
+                assertEquals("Europe/Istanbul", context["timezone"]!!.jsonPrimitive.content)
+            }
+
+        @Test
+        fun `values captured from a ready cache are kept, not replaced at write time`() =
+            writerTest { h ->
+                h.writer.start()
+                runCurrent()
+                h.test.contextProvider.callTimeValues = CallTimeValues(locale = "de-DE")
+
+                h.track(callTime = CallTimeValues(locale = "tr-TR"))
+                runCurrent()
+
+                val context = Json.parseToJsonElement(h.lines().last()).jsonObject["context"]!!.jsonObject
+                assertEquals("tr-TR", context["locale"]!!.jsonPrimitive.content)
+            }
+    }
+
+    @Nested
     inner class `the observer and drops` {
         @Test
         fun `sees Queued for exactly the stored events`() =

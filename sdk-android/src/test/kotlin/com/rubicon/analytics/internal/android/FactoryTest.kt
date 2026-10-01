@@ -33,6 +33,7 @@ import org.robolectric.shadows.ShadowLog
 import java.io.File
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPInputStream
 
 // Both sides of the API 28 process name lookup (Disk 2d).
 @RunWith(RobolectricTestRunner::class)
@@ -96,6 +97,26 @@ class FactoryTest {
         val prefs = File(app.applicationInfo.dataDir, "shared_prefs")
         assertTrue(!prefs.exists() || prefs.list()!!.isEmpty())
         assertFalse(File(app.filesDir, "rubicon").exists())
+    }
+
+    @Test
+    fun `events carry the device's context`() {
+        val analytics = Analytics(app, config())
+
+        analytics.track("Opened")
+
+        assertTrue(RubiconCore.flushBlocking(analytics, 10_000))
+        val body = text(uploads.poll(5, TimeUnit.SECONDS)!!)
+        assertTrue(body.contains("\"namespace\":\"${app.packageName}\""))
+        assertTrue(body.contains("\"api_level\":${Build.VERSION.SDK_INT}"))
+        assertTrue(body.contains("\"locale\":"))
+        assertTrue(body.contains("\"width\":"))
+    }
+
+    private fun text(request: RecordedRequest): String {
+        val bytes = request.body.readByteArray()
+        val gzip = request.getHeader("Content-Encoding") == "gzip"
+        return (if (gzip) GZIPInputStream(bytes.inputStream()).readBytes() else bytes).toString(Charsets.UTF_8)
     }
 
     @Test

@@ -61,6 +61,11 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
   callback; screen and locale by `onConfigurationChanged`; timezone read per event; app, device, OS
   and library never. Time-dependent values (network, screen, locale, timezone) are captured from the
   cache on the calling thread at call time; nothing is read at send time.
+- The cache is filled and re-read on the writer (`ContextProvider.refresh`, at startup and before each
+  message). Before the first fill and after a configuration change, call-time values are `pending`
+  and the writer fills them when it processes the event. `onConfigurationChanged` only counts.
+- Screen = the whole display (`getRealMetrics`), short side as width, so it never implies orientation.
+  `device.type`: `tv` (television UI mode or leanback), `tablet` (smallest width 600 dp), `phone`.
 - Carrier = `networkOperatorName` of the default data subscription (`getDefaultDataSubscriptionId`,
   `createForSubscriptionId`, API 24), falling back to the default `TelephonyManager`. Dual SIM must
   report the data SIM.

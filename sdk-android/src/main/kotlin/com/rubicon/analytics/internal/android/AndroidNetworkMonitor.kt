@@ -52,6 +52,19 @@ internal class AndroidNetworkMonitor(
     @Volatile
     private var lastType: String? = null
 
+    @Volatile
+    private var lastNetwork: Network? = null
+
+    /**
+     * Called on the callback's thread when the network or its type changes, for the context cache
+     * (Context 2). Set by the context provider on its first refresh, after [start].
+     */
+    @Volatile
+    var onNetworkChanged: (() -> Unit)? = null
+
+    /** Whether changes arrive by callback; otherwise the context cache reads them itself. */
+    val usesCallback: Boolean get() = mode == Mode.CALLBACK
+
     /** `wifi`, `cellular`, `ethernet`, `other` or `none`; `null` when it cannot be known (Context 3). */
     val networkType: String?
         get() =
@@ -67,12 +80,19 @@ internal class AndroidNetworkMonitor(
                 network: Network,
                 capabilities: NetworkCapabilities,
             ) {
-                update(State.of(capabilities))
+                val state = State.of(capabilities)
+                // Capabilities also change with signal strength: only another network or type counts.
+                val changed = network != lastNetwork || state.type != lastType
+                lastNetwork = network
+                update(state)
+                if (changed) networkChanged()
             }
 
             override fun onLost(network: Network) {
                 // Below API 24 the request may cover several networks: ask what is left.
+                lastNetwork = null
                 update(query() ?: State.NONE)
+                networkChanged()
             }
         }
 
@@ -123,6 +143,14 @@ internal class AndroidNetworkMonitor(
         lastType = state.type
         val changed = synchronized(lock) { (connected != state.connected).also { connected = state.connected } }
         if (changed) listeners.forEach { it.onConnectivityChanged(state.connected) }
+    }
+
+    private fun networkChanged() {
+        try {
+            onNetworkChanged?.invoke()
+        } catch (t: Throwable) {
+            // The context keeps its previous values; the monitor goes on.
+        }
     }
 
     @SuppressLint("MissingPermission")

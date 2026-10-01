@@ -2,10 +2,6 @@ package com.rubicon.analytics.internal.android
 
 import android.content.Context
 import android.os.SystemClock
-import com.rubicon.analytics.ContextField
-import com.rubicon.analytics.internal.context.CallTimeValues
-import com.rubicon.analytics.internal.context.ContextProvider
-import com.rubicon.analytics.internal.context.StaticValues
 import com.rubicon.analytics.internal.http.HttpTransportFactory
 import com.rubicon.analytics.internal.platform.Clock
 import com.rubicon.analytics.internal.platform.ElapsedClock
@@ -32,14 +28,16 @@ internal object AndroidPlatform {
         processInfo: AndroidProcessInfo,
     ): Platform {
         val root = storageRoot(context)
+        val elapsedClock = ElapsedClock { SystemClock.elapsedRealtime() }
+        val networkMonitor = AndroidNetworkMonitor(context)
         return Platform(
             clock = Clock.SYSTEM,
-            elapsedClock = ElapsedClock { SystemClock.elapsedRealtime() },
+            elapsedClock = elapsedClock,
             random = Random.Default,
             dispatchers = SdkDispatchers.default(),
-            networkMonitor = AndroidNetworkMonitor(context),
+            networkMonitor = networkMonitor,
             httpTransportFactory = HttpTransportFactory.DEFAULT,
-            contextProvider = EmptyContextProvider,
+            contextProvider = AndroidContextProvider(context, networkMonitor, elapsedClock),
             processInfo = processInfo,
             lifecycleSource = BackgroundLifecycleSource,
             logger = LogcatLogger,
@@ -55,14 +53,7 @@ internal object AndroidPlatform {
     private const val ROOT_DIR = "rubicon"
 }
 
-// Stand-ins until steps 7.3 (context provider) and 7.4 (lifecycle) replace them in this pull
-// request: no context values, never in the foreground.
-
-internal object EmptyContextProvider : ContextProvider {
-    override fun staticValues(disabled: Set<ContextField>): StaticValues = StaticValues.NONE
-
-    override fun callTimeValues(disabled: Set<ContextField>): CallTimeValues = CallTimeValues.NONE
-}
+// A stand-in until step 7.4 replaces it in this pull request: never in the foreground.
 
 internal object BackgroundLifecycleSource : LifecycleSource {
     override val isForeground: Boolean = false

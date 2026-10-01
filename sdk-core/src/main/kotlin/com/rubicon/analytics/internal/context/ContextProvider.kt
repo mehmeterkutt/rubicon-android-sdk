@@ -18,6 +18,13 @@ public interface ContextProvider {
      * (Context 2). Must be cheap and must not block.
      */
     public fun callTimeValues(disabled: Set<ContextField>): CallTimeValues
+
+    /**
+     * Brings the call-time cache up to date; called on the writer at startup, before the first event,
+     * and before each message. Values Android signals are refreshed here when the signal cannot be
+     * handled where it arrives. Must not throw.
+     */
+    public fun refresh(disabled: Set<ContextField>) {}
 }
 
 /** The values that do not change during a process (Context 2, 3). */
@@ -54,6 +61,12 @@ public class CallTimeValues(
     public val locale: String? = null,
     /** An IANA zone such as `Europe/Istanbul`. */
     public val timezone: String? = null,
+    /**
+     * The cache was not ready at call time (before the writer's first refresh, or right after a
+     * configuration change): the writer fills the values when it processes the event, from the cache
+     * then, a few milliseconds later.
+     */
+    public val pending: Boolean = false,
 ) {
     public companion object {
         public val NONE: CallTimeValues = CallTimeValues()

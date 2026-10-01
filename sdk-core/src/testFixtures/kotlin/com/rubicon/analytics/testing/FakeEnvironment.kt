@@ -82,9 +82,14 @@ public class FakeLifecycleSource(
 public class FakeContextProvider(
     @Volatile public var staticValues: StaticValues = StaticValues.NONE,
     @Volatile public var callTimeValues: CallTimeValues = CallTimeValues.NONE,
+    /** When true, call-time reads return `pending` until the first [refresh], like the real cache. */
+    @Volatile public var pendingUntilRefresh: Boolean = false,
 ) : ContextProvider {
     private val staticReadCount = AtomicInteger()
     private val callTimeReadCount = AtomicInteger()
+    private val refreshCount = AtomicInteger()
+
+    public val refreshes: Int get() = refreshCount.get()
 
     public val staticReads: Int get() = staticReadCount.get()
     public val callTimeReads: Int get() = callTimeReadCount.get()
@@ -118,9 +123,15 @@ public class FakeContextProvider(
         )
     }
 
+    override fun refresh(disabled: Set<ContextField>) {
+        refreshCount.incrementAndGet()
+        lastDisabled = disabled
+    }
+
     override fun callTimeValues(disabled: Set<ContextField>): CallTimeValues {
         callTimeReadCount.incrementAndGet()
         lastDisabled = disabled
+        if (pendingUntilRefresh && refreshes == 0) return CallTimeValues(pending = true)
         val v = callTimeValues
 
         fun <T> keep(

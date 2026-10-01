@@ -154,7 +154,7 @@ internal class EventPipeline(
         identity: IdentitySnapshot,
         session: SessionContext?,
     ): Event {
-        val context = context(captured.callTime, session)
+        val context = context(callTime(captured.callTime), session)
         return when (captured.type) {
             CapturedEvent.Type.IDENTIFY ->
                 IdentifyEvent(
@@ -201,6 +201,10 @@ internal class EventPipeline(
         PropertyProblem.report(merged.problems, debug, log)
         return merged.values
     }
+
+    // Values the cache could not give at call time are taken now (Context 2).
+    private fun callTime(captured: CallTimeValues): CallTimeValues =
+        if (captured.pending) contextProvider.callTimeValues(disabledFields) else captured
 
     // A disabled field is left out here too, whatever the provider returned (Context 6).
     private fun context(
