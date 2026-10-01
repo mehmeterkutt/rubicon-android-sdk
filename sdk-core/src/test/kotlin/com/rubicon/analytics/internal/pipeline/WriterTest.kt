@@ -126,7 +126,9 @@ class WriterTest {
                 assertEquals(DropReason.BACKPRESSURE, (h.updates.single() as EventUpdate.Dropped).reason)
                 h.writer.start()
                 runCurrent()
-                assertEquals(mapOf("backpressure" to 1), h.deviceStore.state.diagnostics.dropped)
+                // The count reaches SDK Diagnostics at the first flush (Logging 5).
+                val report = h.lines().first { h.field(it, "event") == Diagnostics.EVENT_NAME }
+                assertTrue(report.contains("\"backpressure\":1"), report)
             }
 
         @Test

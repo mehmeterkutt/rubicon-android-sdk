@@ -2,6 +2,7 @@ package com.rubicon.analytics.internal.pipeline
 
 import com.rubicon.analytics.Autocapture
 import com.rubicon.analytics.DropReason
+import com.rubicon.analytics.EventSource
 import com.rubicon.analytics.EventUpdate
 import com.rubicon.analytics.ScreenEvent
 import com.rubicon.analytics.TrackEvent
@@ -261,16 +262,19 @@ internal class Writer(
         )
     }
 
+    /** Appends the accepted results; returns the message ids that reached the store. */
     private fun append(
         results: List<PipelineResult>,
         diagnostics: Boolean,
-    ) {
+    ): Set<String> {
+        val stored = HashSet<String>()
         var immediate: String? = null
         for (result in results) {
             when (result) {
                 is PipelineResult.Accepted -> {
                     // A failed append is counted and logged by the store (Disk 4).
                     if (!platform.eventStore.append(result.line)) continue
+                    stored += result.messageId
                     observe(EventUpdate.Queued(result.event))
                     appendedSinceFlush++
                     if (interval == null) startInterval()
@@ -291,15 +295,53 @@ internal class Writer(
             }
             appendedSinceFlush >= snapshot.flushAt -> flushNow("count")
         }
+        return stored
     }
 
     private fun flushNow(reason: String) {
+        appendDiagnosticsIfDue()
         interval?.cancel()
         interval = null
         appendedSinceFlush = 0
         platform.eventStore.closeOpenSegment()
         uploadSignal.trySend(Unit)
         log.debug { "Flush ($reason), ${platform.eventStore.pendingCount} events pending" }
+    }
+
+    // Set while SDK Diagnostics is being appended, so a flush it causes does not report again.
+    private var reportingDiagnostics = false
+
+    /**
+     * `SDK Diagnostics` right before a flush, when due (Logging 5): never while opted out, pending or
+     * switched off, never through the hooks, and its own drop is not counted. The counters it
+     * reports are taken off only once it is stored.
+     */
+    private fun appendDiagnosticsIfDue() {
+        if (reportingDiagnostics || !sendsDiagnostics || !collecting || consent.state != ConsentState.GRANTED) return
+        val now = platform.clock.currentTimeMillis()
+        val state = deviceStore.state.diagnostics
+        if (!Diagnostics.isDue(state, now)) return
+        reportingDiagnostics = true
+        try {
+            val event =
+                CapturedEvent(
+                    CapturedEvent.Type.TRACK,
+                    Diagnostics.EVENT_NAME,
+                    Diagnostics.properties(state, now),
+                    EventSource.AUTO,
+                    newId(),
+                    now,
+                    identity.snapshot(),
+                    platform.contextProvider.callTimeValues(snapshot.disabledFields),
+                    skipsHooks = true,
+                )
+            if (event.messageId in append(pipeline.process(event), diagnostics = true)) {
+                deviceStore.diagnosticsReported(state, now)
+                log.debug { "SDK Diagnostics written" }
+            }
+        } finally {
+            reportingDiagnostics = false
+        }
     }
 
     private fun startInterval() {

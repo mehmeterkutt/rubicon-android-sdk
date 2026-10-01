@@ -86,6 +86,17 @@ internal data class DiagnosticsState(
     }
 }
 
+/** Whether nothing is counted. */
+internal val DiagnosticsState.isEmpty: Boolean
+    get() = dropped.isEmpty() && issues.isEmpty()
+
+/** These counters without [reported]'s, keeping only what is left above zero. */
+internal fun DiagnosticsState.minus(reported: DiagnosticsState): DiagnosticsState {
+    fun Map<String, Int>.less(other: Map<String, Int>): Map<String, Int> =
+        mapValues { (key, n) -> n - (other[key] ?: 0) }.filterValues { it > 0 }
+    return copy(dropped = dropped.less(reported.dropped), issues = issues.less(reported.issues))
+}
+
 /** Counts to add to a [DiagnosticsState]. */
 internal data class DiagnosticsCount(
     val dropped: Map<String, Int> = emptyMap(),
@@ -190,6 +201,24 @@ internal class DeviceStore(
                 }
             }
             early = DiagnosticsCount()
+        }
+    }
+
+    /**
+     * `SDK Diagnostics` with [reported] was written at [at] (Logging 5): its counts are taken off and
+     * [at] becomes the last time. Counts that arrived meanwhile stay, and start the next period.
+     */
+    fun diagnosticsReported(
+        reported: DiagnosticsState,
+        at: Long,
+    ) {
+        synchronized(countLock) {
+            device.update {
+                it?.let { state ->
+                    val left = state.diagnostics.minus(reported)
+                    state.copy(diagnostics = left.copy(periodStart = if (left.isEmpty) null else at, lastSentAt = at))
+                }
+            }
         }
     }
 
