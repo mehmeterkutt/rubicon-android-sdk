@@ -715,15 +715,15 @@ release.
 
 | Decision | In short | Steps | Tests |
 |---|---|---|---|
-| Public API 1 | Developer holds one instance per process, no singleton | 6.7, 7.1 |  |
-| Public API 2 | `Analytics` interface, internal implementation, factory | 3.3, 6.7, 7.1 | 3.3: `AnalyticsJavaTest.javaCodeCanImplementAFake`, `NoOpAnalyticsTest` |
+| Public API 1 | Developer holds one instance per process, no singleton | 6.7, 7.1 | 6.7: `CoreIntegrationTest`.`a second instance returns the first in release and throws in debug` |
+| Public API 2 | `Analytics` interface, internal implementation, factory | 3.3, 6.7, 7.1 | 3.3: `AnalyticsJavaTest.javaCodeCanImplementAFake`, `NoOpAnalyticsTest`; 6.7: `CoreIntegrationTest` (the factory returns `DefaultAnalytics`, or `NoOpAnalytics` for an unusable configuration) |
 | Public API 3 | `Map<String, Any?>` validated at the boundary | 2.5 | `PropertyNormalizerTest` (all) |
 | Public API 4 | `beforeSend` list fixed at creation, fail-closed; automatic events keep name and keys | 3.2, 6.3a | 3.2: `EventJavaTest.aHookIsAJavaLambdaThatCopiesOrDrops`, `ConfigValidatorTest.config snapshot`; 6.3a: `EventPipelineTest` `hooks on the app's events`, `hooks on automatic events`, `results that are not a copy`, `SDK Diagnostics` |
 | Public API 5 | Public methods return `Unit` | 3.3 | `NoOpAnalyticsTest.every method returns Unit except the two readers` |
 | Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1, 2.1 | Build: `sdk-core` is `kotlin("jvm")`, `sdk-android` depends on it with `api`; `BuildInfoTest`, `RobolectricSetupTest`; 2.1: `TestPlatformAccessTest` |
 | Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 | 1.1: `explicitApi()` and `apiCheck` in `check` (gates); 3.1: `ConfigJavaTest`; 3.3: `AnalyticsJavaTest.everyMethodIsCallableFromJava` |
 | Public API 8 | Vocabulary and read-only `deviceId` | 3.3, 6.1, 6.5 | 3.3: `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
-| Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3b, 6.7 | 3.3: contract in the KDoc of `Analytics`; `NoOpAnalyticsTest.calls from many threads at once never throw`; 6.1: `IdentityTest` `ordering` (identify then snapshot, calls before load in call order); 6.3b: `WriterTest`.`events from one thread are stored in call order`, `calls made before the writer started keep their order and identity` |
+| Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3b, 6.7 | 3.3: contract in the KDoc of `Analytics`; `NoOpAnalyticsTest.calls from many threads at once never throw`; 6.1: `IdentityTest` `ordering` (identify then snapshot, calls before load in call order); 6.3b: `WriterTest`.`events from one thread are stored in call order`, `calls made before the writer started keep their order and identity`; 6.7: `StressTest` (16 threads, per-thread order, exactly once) |
 | Event Model 1 | Top level, `properties`/`traits`, `context` ownership | 3.2, 6.3a | 3.2: `EventModelTest.golden files` (all); 6.3a: `EventPipelineTest`.`a track event matches the golden file`, `super properties merge, the event's own key wins` |
 | Event Model 2 | Sealed `TrackEvent`, `ScreenEvent`, `IdentifyEvent`; `type` on the wire | 3.2, 8.4 | 3.2: `EventModelTest.golden files` (all) |
 | Event Model 3 | Immutable normalized maps, validated twice | 2.5, 6.3a | 2.5: `PropertyNormalizerTest.deep copies` (all); 6.3a: `EventPipelineTest`.`an invalid property from a hook is dropped by the second validation` |
@@ -732,8 +732,8 @@ release.
 | Event Model 6 | Public classes, internal constructors, limited `copy` | 3.2, 6.3a | `EventModelTest` `limited copy`, `read-only for hooks`, `safe descriptions`; `EventJavaTest.copyHasJavaOverloads`; 6.3a: `EventPipelineTest` `results that are not a copy` |
 | Configuration 1 | Code plus restrict-only remote, allowlist, next launch, two immediate flags | 5.3, 6.3, 6.4 | 5.3: `RemoteConfigTest` `validation`, `the client` (200, 304, 404, failures, kill switch, network requests, restart); `docs/remote-config.md`; 6.4: `UploaderTest` `remote configuration` (once per launch, also with uploads gated), `the kill switch blocks uploads` |
 | Configuration 2 | One class, small groups, tuning internal | 3.1 | `ConfigValidatorTest.default values` (all), `ConfigJavaTest` |
-| Configuration 3 | Only `apiKey` required, factory validation, one instance, main process | 3.1, 6.7, 7.1 | 3.1: `ConfigValidatorTest` `api key`, `host url`, `numeric bounds`, `custom headers` |
-| Configuration 4 | Snapshot and freeze | 3.1 | `ConfigValidatorTest` `config snapshot`, `frozen config` |
+| Configuration 3 | Only `apiKey` required, factory validation, one instance, main process | 3.1, 6.7, 7.1 | 3.1: `ConfigValidatorTest` `api key`, `host url`, `numeric bounds`, `custom headers`; 6.7: `CoreIntegrationTest`.`an unusable configuration gives the no-op instance in release and throws in debug`, `a second instance returns the first` |
+| Configuration 4 | Snapshot and freeze | 3.1, 6.7 | `ConfigValidatorTest` `config snapshot`, `frozen config`; 6.7: `CoreIntegrationTest`.`the configuration is frozen after creation` |
 | Configuration 5 | Public hatches, internal `Platform`, `HttpURLConnection`, OkHttp `compileOnly` | 2.1, 5.1, 7.6 | 2.1: `FakeEnvironmentTest.test platform` (all), `TestPlatformAccessTest`; 5.1: `HttpURLConnectionTransportTest`.`the production constructor takes its parts from the platform` |
 | Configuration 6 | No platform types in configuration | 3.1 | `ConfigJavaTest` (the whole configuration compiles and runs on the JVM) |
 | Identity 1 | `deviceId` and `userId` in files outside backup | 4.1, 6.1, 7.1 | 4.1: `DeviceStoreTest` `missing and unreadable`, `files left byte-identical`; `PersonStoreTest` likewise; 6.1: `IdentityTest` `device id` |
@@ -760,7 +760,7 @@ release.
 | Lifecycle 4 | Install and update detection | 7.4 |  |
 | Lifecycle 5 | Plain names, `source` `app`/`auto` | 3.2, 7.4 | 3.2: `EventModelTest.wire names` |
 | Lifecycle 6 | `Autocapture` set and defaults, `NETWORK_REQUESTS` off at once | 3.1, 5.3, 7.4, 7.6 | 3.1: `ConfigValidatorTest.default values` |
-| Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3b, 6.4 | 6.3b: `WriterTest` (single writer, channel of 1000, backpressure, conflated upload signal); 6.4: `UploaderTest`.`no two requests overlap under a burst of signals` |
+| Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3b, 6.4, 6.7 | 6.3b: `WriterTest` (single writer, channel of 1000, backpressure, conflated upload signal); 6.4: `UploaderTest`.`no two requests overlap under a burst of signals`; 6.7: `StressTest` (backpressure counted exactly under load) |
 | Queue 2 | Flush triggers and suppression, no WorkManager | 6.3b, 6.4, 7.4 | 6.3b: `WriterTest` `flush triggers`; 6.4: `UploaderTest` `gates` |
 | Queue 3 | 30 events or 60 s, bounds, remote only raises | 3.1, 5.3 | 3.1: `ConfigValidatorTest.numeric bounds` (flush); 5.3: `RemoteConfigTest`.`flushing can only become less frequent` |
 | Queue 4 | 100 events / 512 KB batches, oldest first, sequential | 4.2, 6.4 | 4.2: `FileEventStoreTest` `segments` (closes at 100 events and before 512 KB); 6.4: `UploaderTest`.`batches go oldest first, are deleted after 2xx, and Sent lists their ids`, `it stops at the first failure` |
@@ -834,7 +834,7 @@ release.
 - [x] 6.4 Uploader
 - [x] 6.5 Privacy
 - [x] 6.6 SDK Diagnostics
-- [ ] 6.7 `DefaultAnalytics` and the core factory
+- [x] 6.7 `DefaultAnalytics` and the core factory
 - [ ] 7.1 Factory and Android platform
 - [ ] 7.2 Network monitor
 - [ ] 7.3 Context provider
@@ -975,6 +975,12 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 6.6 | Resetting the counters | The counts the event reported are taken off once it is stored, rather than setting everything to zero, so a drop counted by the uploader or a calling thread while it is written starts the next period instead of being lost. A failed write leaves them all. | `DeviceStore.diagnosticsReported` |
 | 2026-10-01 | 6.6 | The property shape | `period_start` as an ISO string; `dropped` always with `total`, then each reason that counted, by name; `issues` by code, `{}` when none; keys sorted. Pinned by `golden/sdk-diagnostics.json`. | `Diagnostics` |
 | 2026-10-01 | 6.6 | When it is written | Right before every flush, when due, sending allowed (code switch and remote rate), collecting, and consent granted (not pending, not opted out). It passes the pipeline without hooks; its own drop is not counted, and a flush it causes does not report again. Like any track event it carries the session and the super properties of the moment. | `Writer` |
+| 2026-10-01 | 6.7 | The core factory | `RubiconCore.create(config, platform)`, `@RubiconInternal`: validates and reports, freezes the object, logs the host at INFO, then builds and wires every component and starts the writer and the uploader. A blank key or invalid host gives `NoOpAnalytics` in release. The instance guard is process-wide; `resetForTests` forgets it. | `RubiconCore` |
+| 2026-10-01 | 6.7 | Entry points | Every public method catches `Throwable` and logs `WORKER_FAILED` (CLAUDE.md, non-negotiable 1); with `debug` on, the developer mistakes the decisions name (`IllegalArgumentException`, `IllegalStateException`) are thrown. No event is created on the calling thread while opted out or switched off; before the stored choice is known the writer decides. An identify carries its ticket so the writer sends it only when the identity decided so. | `DefaultAnalytics` |
+| 2026-10-01 | 6.7 | `flushBlocking(timeout)` and `shutdown()` | Internal: `flushBlocking` asks for a flush and polls until nothing is pending and the writer is idle, or the timeout passes. `shutdown` cancels the scope and waits for it, for tests that start another instance on the same files. | `DefaultAnalytics` |
+| 2026-10-01 | 6.7 | Store writes under load (revises 6.3b) | The writer writes the stores when no message is waiting, and at least every 100 messages, instead of after every message: a burst of `register` calls cost one fsync each before, and the stress run showed the writer four times faster after the change (Disk 7: changes coalesce). | `Writer` |
+| 2026-10-01 | 6.7 | A batch on its way is never trimmed (found by the stress run) | `FileEventStore` protected the segment being read only while it was read; trimming could then delete a batch whose request was in flight and count it as `queue_full` although it was delivered. The protection now lasts until the segment is deleted or the next batch is read. | `FileEventStore` |
+| 2026-10-01 | 6.7 | What the stress run proves | 16 threads in tight loops outrun the writer, so most calls end as `backpressure` or `queue_full`, the bounded behaviour Queue 1 and 5 decide. The test asserts that every event either reached the server exactly once, in per-thread order, or is counted under its reason, and that `backpressure` matches the observer exactly. | `StressTest` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

@@ -44,7 +44,8 @@ public class FileEventStore(
     private var total = 0
     private var nextIndex = 0L
 
-    // The segment the uploader is reading, which trimming leaves alone; guarded by lock.
+    // The segment the uploader is sending: from its writeBatch until it is deleted or the next batch
+    // is read, so trimming never deletes a batch that is on its way; guarded by lock.
     private var reading: Long? = null
 
     // Writer only.
@@ -204,8 +205,6 @@ public class FileEventStore(
             skipped.remove(index)
             deleteSegment(index)
             return BatchResult.Unreadable(deleted = true, cause = e)
-        } finally {
-            synchronized(lock) { reading = null }
         }
     }
 
@@ -222,6 +221,7 @@ public class FileEventStore(
             synchronized(lock) {
                 val indexes = closed.keys.toList()
                 closed.clear()
+                reading = null
                 total = 0
                 indexes
             }
@@ -240,6 +240,7 @@ public class FileEventStore(
     override fun deleteSegment(index: Long) {
         val count =
             synchronized(lock) {
+                if (reading == index) reading = null
                 val count = closed.remove(index) ?: return
                 total -= count
                 count

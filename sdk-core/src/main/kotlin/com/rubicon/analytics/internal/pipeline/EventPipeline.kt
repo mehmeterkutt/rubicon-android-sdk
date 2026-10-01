@@ -21,6 +21,7 @@ import com.rubicon.analytics.internal.context.CallTimeValues
 import com.rubicon.analytics.internal.context.ContextProvider
 import com.rubicon.analytics.internal.context.StaticValues
 import com.rubicon.analytics.internal.event.EventWire
+import com.rubicon.analytics.internal.identity.IdentifyTicket
 import com.rubicon.analytics.internal.identity.IdentityRef
 import com.rubicon.analytics.internal.identity.IdentitySnapshot
 import com.rubicon.analytics.internal.log.Code
@@ -47,6 +48,11 @@ internal class CapturedEvent(
     val callTime: CallTimeValues,
     /** `SDK Diagnostics` reports on the SDK itself and never reaches a hook (Logging 5). */
     val skipsHooks: Boolean = false,
+    /**
+     * For identify: whether to send it is decided by the identity, possibly only when the stores
+     * are loaded (plan section 15, step 6.1); the writer reads it in call order.
+     */
+    val ticket: IdentifyTicket? = null,
 ) {
     enum class Type { TRACK, SCREEN, IDENTIFY }
 
