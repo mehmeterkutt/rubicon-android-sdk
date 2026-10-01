@@ -464,29 +464,43 @@ never sees it, and `jvmTarget` does not restrict the Java API.
   maximum duration, clock moved back, restart within and after the timeout, last activity written at
   most every 30 s, reset and user switch order of events.
 
-### 6.3 Writer and pipeline
+### 6.3a Event pipeline
 
-- Read: Queue 1, 2 and 7, Public API 4 and 9, Event Model 3, Disk 4, Logging 4c.
+Split from 6.3 (too big for one pull request): the transformation of one event, without coroutines.
+
+- Read: Public API 3 and 4, Event Model 1, 3 and 6, Context 2 to 6, Serialization 3, Logging 4c.
+- Build: the event as captured on the calling thread (name or traits, normalized properties,
+  identity reference, time-dependent context, `message_id`, timestamp, source); internal steps in
+  order: context (static values added on the worker, `disabledFields` never read), super properties
+  (the event's own key wins, Context 5), session, `beforeSend` chain (fail-closed, `before_send`;
+  automatic events keep name and top-level keys, section 15, hook rules; a result that is not a
+  `copy` of the input is dropped, section 15, step 6.3), second validation, serialization with the
+  32 KB check (`oversize`); `SDK Diagnostics` skips the hooks; the result is a line to append or a drop
+  with its reason, and `EventUpdate.Queued` or `Dropped` for the observer.
+- Tests: a hook that drops, throws, renames or adds properties, one that returns an invalid
+  property, and one that returns an event it built itself or of a foreign subclass (section 15, step
+  3.2); on an automatic event a hook that changes values (to `null`, to another type, nested values)
+  passes, and one that renames, adds or removes a top-level key or returns `null` drops it with
+  `before_send` and throws in debug; `SDK Diagnostics` never reaches a hook; hooks run in list order;
+  super properties merge with the event's key winning; disabled context fields are never read; an
+  event over 32 KB is dropped as `oversize`; the line matches the golden files.
+
+### 6.3b Writer
+
+- Read: Queue 1, 2 and 7, Public API 9, Privacy 2, Disk 4, Logging 4c.
 - Build: SDK scope (`SupervisorJob`, `CoroutineExceptionHandler` that logs and never rethrows in
-  release); the writer's first task is loading `DeviceStore` (Privacy 2); write channel of 1000 with
-  `trySend` (`backpressure`), `WriteMessage` as in Queue 1; messages for events, `Flush`, identity
-  and super property persistence, consent changes, `clearLocalData`; internal steps in order: context, super properties, session,
-  `beforeSend` chain (fail-closed, `before_send`; automatic events keep name and top-level keys,
-  section 15, hook rules), second validation, serialization with the 32 KB
-  check (`oversize`), append; time-dependent context (network, screen, locale, timezone) captured on
-  the calling thread, the rest added on the worker (Context 2); `EventUpdate.Queued` after the append;
-  internal `FlushTrigger` with `CountTrigger` (pending on disk including leftovers), `IntervalTrigger`
-  (from the first pending event, started at process start when leftovers exist, cancelled by any
-  flush), `BackgroundTrigger`, `NetworkTrigger` (only while events are pending),
-  `ImmediateEventTrigger` (exact, case-sensitive final name after hooks, flush after persisting,
-  DEBUG line). No startup flush and no periodic timer.
+  release); the writer's first task is loading `DeviceStore` and `PersonStore`, then `Identity.load`,
+  `SessionManager.start` and `EventStore.open` (Privacy 2, section 15, step 6.1); write channel of
+  1000 with `trySend` (`backpressure`), `WriteMessage` as in Queue 1; messages for events, `Flush`,
+  store persistence, lifecycle and person-cleared signals for the session (section 15, step 6.2),
+  consent changes, `clearLocalData`; the 6.3a pipeline per event, then append and
+  `EventUpdate.Queued`; internal `FlushTrigger` with `CountTrigger` (pending on disk including
+  leftovers), `IntervalTrigger` (from the first pending event, started at process start when leftovers
+  exist, cancelled by any flush), `BackgroundTrigger`, `NetworkTrigger` (only while events are
+  pending), `ImmediateEventTrigger` (exact, case-sensitive final name after hooks, flush after
+  persisting, DEBUG line). No startup flush and no periodic timer.
 - Tests: order of calls from one thread is kept; no event is created once `RuntimeFlags.collecting`
-  is off (remote kill switch or outside `sample_rate`, 5.3); a hook that drops, throws, renames or adds
-  properties, one that returns an invalid property, and one that returns an event it built itself
-  or of a foreign subclass (section 15, step 3.2); on an automatic event a hook that changes values
-  (to `null`, to another type, nested values) passes, and one that renames, adds or removes a
-  top-level key or returns `null` drops it with `before_send` and throws in debug; `SDK Diagnostics`
-  never reaches a hook; the observer sees `Queued` for exactly the
+  is off (remote kill switch or outside `sample_rate`, 5.3); the observer sees `Queued` for exactly the
   persisted events; channel full counts `backpressure` without blocking the caller; every trigger
   fires once and only when its condition holds; `flush()` includes all earlier events.
 
@@ -704,18 +718,18 @@ release.
 | Public API 1 | Developer holds one instance per process, no singleton | 6.7, 7.1 |  |
 | Public API 2 | `Analytics` interface, internal implementation, factory | 3.3, 6.7, 7.1 | 3.3: `AnalyticsJavaTest.javaCodeCanImplementAFake`, `NoOpAnalyticsTest` |
 | Public API 3 | `Map<String, Any?>` validated at the boundary | 2.5 | `PropertyNormalizerTest` (all) |
-| Public API 4 | `beforeSend` list fixed at creation, fail-closed; automatic events keep name and keys | 3.2, 6.3 | 3.2: `EventJavaTest.aHookIsAJavaLambdaThatCopiesOrDrops`, `ConfigValidatorTest.config snapshot` |
+| Public API 4 | `beforeSend` list fixed at creation, fail-closed; automatic events keep name and keys | 3.2, 6.3a | 3.2: `EventJavaTest.aHookIsAJavaLambdaThatCopiesOrDrops`, `ConfigValidatorTest.config snapshot`; 6.3a: `EventPipelineTest` `hooks on the app's events`, `hooks on automatic events`, `results that are not a copy`, `SDK Diagnostics` |
 | Public API 5 | Public methods return `Unit` | 3.3 | `NoOpAnalyticsTest.every method returns Unit except the two readers` |
 | Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1, 2.1 | Build: `sdk-core` is `kotlin("jvm")`, `sdk-android` depends on it with `api`; `BuildInfoTest`, `RobolectricSetupTest`; 2.1: `TestPlatformAccessTest` |
 | Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 | 1.1: `explicitApi()` and `apiCheck` in `check` (gates); 3.1: `ConfigJavaTest`; 3.3: `AnalyticsJavaTest.everyMethodIsCallableFromJava` |
 | Public API 8 | Vocabulary and read-only `deviceId` | 3.3, 6.1, 6.5 | 3.3: `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
-| Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3, 6.7 | 3.3: contract in the KDoc of `Analytics`; `NoOpAnalyticsTest.calls from many threads at once never throw`; 6.1: `IdentityTest` `ordering` (identify then snapshot, calls before load in call order) |
-| Event Model 1 | Top level, `properties`/`traits`, `context` ownership | 3.2, 6.3 | 3.2: `EventModelTest.golden files` (all) |
+| Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3b, 6.7 | 3.3: contract in the KDoc of `Analytics`; `NoOpAnalyticsTest.calls from many threads at once never throw`; 6.1: `IdentityTest` `ordering` (identify then snapshot, calls before load in call order); 6.3b: `WriterTest`.`events from one thread are stored in call order`, `calls made before the writer started keep their order and identity` |
+| Event Model 1 | Top level, `properties`/`traits`, `context` ownership | 3.2, 6.3a | 3.2: `EventModelTest.golden files` (all); 6.3a: `EventPipelineTest`.`a track event matches the golden file`, `super properties merge, the event's own key wins` |
 | Event Model 2 | Sealed `TrackEvent`, `ScreenEvent`, `IdentifyEvent`; `type` on the wire | 3.2, 8.4 | 3.2: `EventModelTest.golden files` (all) |
-| Event Model 3 | Immutable normalized maps, validated twice | 2.5, 6.3 | 2.5: `PropertyNormalizerTest.deep copies` (all) |
+| Event Model 3 | Immutable normalized maps, validated twice | 2.5, 6.3a | 2.5: `PropertyNormalizerTest.deep copies` (all); 6.3a: `EventPipelineTest`.`an invalid property from a hook is dropped by the second validation` |
 | Event Model 4 | `message_id` UUIDv7, never regenerated | 2.3, 6.3, 6.4 | 2.3: `UuidV7GeneratorTest` (all) |
 | Event Model 5 | Epoch ms, ISO dates in properties, `sent_at` per attempt | 2.3, 6.4 | 2.3: `IsoDatesTest` (all) |
-| Event Model 6 | Public classes, internal constructors, limited `copy` | 3.2 | `EventModelTest` `limited copy`, `read-only for hooks`, `safe descriptions`; `EventJavaTest.copyHasJavaOverloads` |
+| Event Model 6 | Public classes, internal constructors, limited `copy` | 3.2, 6.3a | `EventModelTest` `limited copy`, `read-only for hooks`, `safe descriptions`; `EventJavaTest.copyHasJavaOverloads`; 6.3a: `EventPipelineTest` `results that are not a copy` |
 | Configuration 1 | Code plus restrict-only remote, allowlist, next launch, two immediate flags | 5.3, 6.3, 6.4 | 5.3: `RemoteConfigTest` `validation`, `the client` (200, 304, 404, failures, kill switch, network requests, restart); `docs/remote-config.md` |
 | Configuration 2 | One class, small groups, tuning internal | 3.1 | `ConfigValidatorTest.default values` (all), `ConfigJavaTest` |
 | Configuration 3 | Only `apiKey` required, factory validation, one instance, main process | 3.1, 6.7, 7.1 | 3.1: `ConfigValidatorTest` `api key`, `host url`, `numeric bounds`, `custom headers` |
@@ -729,11 +743,11 @@ release.
 | Identity 5 | `reset` clears person data only, no event | 4.1, 6.1 | 4.1: `PersonStoreTest.person json has exactly the decided keys`, `DeviceStoreTest.device json has exactly the decided keys`; 6.1: `IdentityTest`.`reset clears user and all super properties`; `remote config json has exactly the decided keys` |
 | Identity 6 | No alias | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
 | Context 1 | Internal `ContextProvider`, `ContextStep`, nothing on the main thread | 2.1, 6.3, 7.3 |  |
-| Context 2 | Cached and signal-refreshed, captured at call time, carrier of the data SIM | 6.3, 7.2, 7.3 |  |
+| Context 2 | Cached and signal-refreshed, captured at call time, carrier of the data SIM | 6.3a, 7.2, 7.3 | 6.3a: `EventPipelineTest`.`static context is read once, on first need` |
 | Context 3 | Twenty fields, unknown omitted (list to be revisited) | 7.3, 8.4 |  |
 | Context 4 | Everything in `context`, read-only for hooks | 3.2 | `EventModelTest.read-only for hooks` (all), `EventJavaTest.contextIsReadThroughGetters` |
 | Context 5 | `register`/`unregister`, validated at registration | 2.5, 6.1 | 2.5: `PropertyNormalizerTest.property count` (super properties dropped first); 6.1: `IdentityTest` `reset and super properties` |
-| Context 6 | `context.disabledFields`, never read when disabled | 3.1, 7.3 | 3.1: `ConfigValidatorTest.default values` (18 values, no `LIBRARY_*`) |
+| Context 6 | `context.disabledFields`, never read when disabled | 3.1, 7.3, 6.3a | 3.1: `ConfigValidatorTest.default values` (18 values, no `LIBRARY_*`); 6.3a: `EventPipelineTest`.`disabled fields are passed to the provider and left out of the event` |
 | Session 1 | SDK computes sessions, on every event | 6.2 | `SessionManagerTest` (every event gets the session or none) |
 | Session 2 | UUIDv7 id plus `started_at` | 6.2 | `SessionManagerTest`.`the first event in the foreground starts it` (id from the generator passed in) |
 | Session 3 | Foreground keeps alive, background never extends | 6.2, 7.4 | 6.2: `SessionManagerTest` `starting a session`, `the background countdown` |
@@ -746,26 +760,26 @@ release.
 | Lifecycle 4 | Install and update detection | 7.4 |  |
 | Lifecycle 5 | Plain names, `source` `app`/`auto` | 3.2, 7.4 | 3.2: `EventModelTest.wire names` |
 | Lifecycle 6 | `Autocapture` set and defaults, `NETWORK_REQUESTS` off at once | 3.1, 5.3, 7.4, 7.6 | 3.1: `ConfigValidatorTest.default values` |
-| Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3, 6.4 |  |
-| Queue 2 | Flush triggers and suppression, no WorkManager | 6.3, 6.4, 7.4 |  |
+| Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3b, 6.4 | 6.3b: `WriterTest` (single writer, channel of 1000, backpressure, conflated upload signal) |
+| Queue 2 | Flush triggers and suppression, no WorkManager | 6.3b, 6.4, 7.4 | 6.3b: `WriterTest` `flush triggers` |
 | Queue 3 | 30 events or 60 s, bounds, remote only raises | 3.1, 5.3 | 3.1: `ConfigValidatorTest.numeric bounds` (flush); 5.3: `RemoteConfigTest`.`flushing can only become less frequent` |
 | Queue 4 | 100 events / 512 KB batches, oldest first, sequential | 4.2, 6.4 | 4.2: `FileEventStoreTest` `segments` (closes at 100 events and before 512 KB) |
 | Queue 5 | 1000 events, 3 days, drop counters | 4.2, 6.6 | 4.2: `FileEventStoreTest` `capacity`, `age limit` (exactly 3 days kept) |
 | Queue 6 | No public flush policy, no pause or resume | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
-| Queue 7 | `flush.immediateEvents` | 3.1, 6.3 | 3.1: `ConfigValidatorTest.config snapshot` |
+| Queue 7 | `flush.immediateEvents` | 3.1, 6.3b | 3.1: `ConfigValidatorTest.config snapshot`; 6.3b: `WriterTest`.`an immediate event flushes after it is stored, matched exactly`, `the name that counts is the final one, after the hooks` |
 | Disk 1 | Segmented append log, one segment is one batch | 4.2 | `FileEventStoreTest` `segments`, `10 000 events are read back in order` |
 | Disk 2a | Everything under `noBackupFilesDir/rubicon/` | 4.1, 4.2, 7.1 | 4.1: `FileKeyValueStore` writes under `Platform.storageRoot`; `FileKeyValueStoreTest.files are app-private` |
 | Disk 2b | Fixed-width index from the directory | 4.2 | `FileEventStoreTest.index order survives a restart and gaps` |
 | Disk 2c | One directory per key, others deleted (`api_key_changed`) | 2.3, 4.2 | 2.3: `HttpDatesAndHashingTest.sha-256` (all); 4.2: `FileEventStoreTest` `events of another API key are deleted and counted`, `a later format directory is never touched` |
 | Disk 2d | Main process only | 7.1, 8.1 |  |
 | Disk 3 | JSON Lines equal to the wire event, `v1` directory | 4.2, 2.4 | 2.4: `JsonTest.reading fields` (all), `JsonTest.round trip` (a line never holds a raw line break); 4.2: `FileEventStoreTest` `the batch body` (byte for byte) |
-| Disk 4 | One `write()` per event, fsync points, `.tmp` recovery | 4.2, 7.4, 8.1 | 4.2: `FileEventStoreTest` `leftover open segment` (truncation at every byte), `failures` |
+| Disk 4 | One `write()` per event, fsync points, `.tmp` recovery | 4.2, 7.4, 8.1, 6.3b | 4.2: `FileEventStoreTest` `leftover open segment` (truncation at every byte), `failures`; 6.3b: `WriterTest`.`backgrounding flushes and syncs` |
 | Disk 5 | Corrupt lines skipped, unreadable segments retried then deleted | 4.2 | `FileEventStoreTest` `corrupt lines`, `unknown files are deleted with a warning`, `an unreadable segment is retried and deleted after three consecutive failures` |
 | Disk 6 | No encryption, storage not replaceable | 2.1 | 2.1: `EventStore`, `KeyValueStore` are `@RubiconInternal` (opt-in error for apps); `InMemoryStoresTest` |
 | Disk 7 | Atomic person and device stores with `v` | 4.1 | `FileKeyValueStoreTest` `atomic replacement`; `PersonStoreTest` and `DeviceStoreTest` (`many updates in a row produce one write`, newer `v`) |
 | Serialization 1 | `org.json` `compileOnly`, one conversion layer | 1.1, 2.4 | 1.1: `android-json` `compileOnly` in `sdk-core`, absent from the release runtime classpath; 2.4: `JsonTest` (all), `JsonOnAndroidTest` |
 | Serialization 2 | Conversion table, no `java.time` | 2.5, 1.1 | 1.1: `SourceScannerTest.java time rule` (all), `SourceRulesPluginTest.check fails on a planted java time import and names the file and line`; 2.5: `PropertyNormalizerTest.conversion table` (all) |
-| Serialization 3 | Size limits | 2.5, 6.3 | 2.5: `PropertyNormalizerTest` `property keys`, `string values`, `nesting depth`, `property count`, `event names` |
+| Serialization 3 | Size limits | 2.5, 6.3a | 2.5: `PropertyNormalizerTest` `property keys`, `string values`, `nesting depth`, `property count`, `event names`; 6.3a: `EventPipelineTest` `size limit` (exactly 32 KB kept, one byte more dropped) |
 | Serialization 4 | snake_case, epoch ms, own ISO formatter | 2.3, 3.2 | 2.3: `IsoDatesTest` (all); 3.2: `EventModelTest.golden files` |
 | Serialization 5 | Streamed body, golden files, independent parser | 2.4, 3.2, 6.4, 8.4 | 2.4: `JsonTest.round trip` (independent parser), `JsonOnAndroidTest` (Android's `org.json`); 3.2: golden `track.json`, `screen.json`, `identify.json` |
 | HTTP 1 | `HttpURLConnection` behind `HttpTransport` | 5.1 | `HttpURLConnectionTransportTest` (all, against MockWebServer) |
@@ -781,7 +795,7 @@ release.
 | Retry 5 | Pipeline wait and per-segment attempts persisted, clock guard | 4.1, 5.2 | 4.1: `DeviceStoreTest.the state and the cache read back as written` (retry object); 5.2: `RetryPolicyTest` `persistence` (restart, clock moved back by a day) |
 | Retry 6 | One default-network callback, `INTERNET` without `VALIDATED` | 7.2 |  |
 | Privacy 1 | `optOut` stops new events, queue still sends | 6.5, 7.6 |  |
-| Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3, 6.5 | 4.1: `DeviceStoreTest.consent is null, granted or denied` |
+| Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3b, 6.5 | 4.1: `DeviceStoreTest.consent is null, granted or denied`; 6.3b: `WriterTest`.`the stores are loaded and written by the writer` |
 | Privacy 3 | `clearLocalData`, read-only `deviceId` | 6.5 |  |
 | Privacy 4 | `Consent` `GRANTED`/`PENDING` | 3.1, 6.5 | 3.1: `ConfigValidatorTest.default values` |
 | Privacy 5a | No field presets, checklist in the guide | 8.5 |  |
@@ -791,7 +805,7 @@ release.
 | Logging 1 | `RubiconLogger`, instance-owned, Logcat default | 2.2, 7.1 | 2.2: `LogTest.log lines` (all), `LoggingJavaTest` |
 | Logging 2 | Levels, default `WARN`, repeat limit, no runtime setter | 2.2 | `LogTest.repeat limit` (all), `IssueCodesTest` |
 | Logging 3 | Inline gating | 2.2 | `LogTest.level gating` (all) |
-| Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3, 6.4 | 1.1: `SourceScannerTest.println rule` (all); 2.2: `SourceScannerTest.values in log rule` (all), `LogTest.throwing logger`, `LogTest.event observer`, `LogTest.re-entrancy` (all); 3.2: `EventJavaTest.anObserverIsAJavaLambda`, `EventModelTest.safe descriptions` |
+| Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3b, 6.4 | 1.1: `SourceScannerTest.println rule` (all); 2.2: `SourceScannerTest.values in log rule` (all), `LogTest.throwing logger`, `LogTest.event observer`, `LogTest.re-entrancy` (all); 3.2: `EventJavaTest.anObserverIsAJavaLambda`, `EventModelTest.safe descriptions`; 6.3b: `WriterTest` `the observer and drops` |
 | Logging 5 | `SDK Diagnostics` | 4.1, 6.6, 5.3 | 4.1: `DeviceStoreTest` `diagnostics counters`; 5.3: `RemoteConfigTest` `sampling`, `diagnostics follow the code switch and their own sample rate` |
 
 ## 14. Status
@@ -815,7 +829,8 @@ release.
 - [x] 5.3 Remote configuration
 - [x] 6.1 Identity and super properties
 - [x] 6.2 Session
-- [ ] 6.3 Writer and pipeline
+- [x] 6.3a Event pipeline
+- [x] 6.3b Writer
 - [ ] 6.4 Uploader
 - [ ] 6.5 Privacy
 - [ ] 6.6 SDK Diagnostics
@@ -939,6 +954,15 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 6.2 | The 30-second last activity write | Done with events in the foreground, at most every 30 s, and at once on backgrounding; no timer (Session 4). A foreground with no events at all leaves the last write as the backdated end after a crash. | `SessionManager` |
 | 2026-10-01 | 6.2 | Where the session manager runs | On the writer only; foreground, background and person-cleared signals reach it as writer messages in order with events (6.3). A process that starts with a valid saved session counts its background time from the saved last activity. The session written to `PersonStore` is only ever the one the manager owns, so a person cleared on the calling thread never gets the old session back. | `SessionManager`, step 6.3 |
 | 2026-10-01 | 6.2 | The end of a session at `reset()` or a user switch | Backdated to now when in the foreground, else to the last activity; it carries the previous person's identity. | `SessionManager` |
+| 2026-10-01 | 6.3 | Step 6.3 is too big for one pull request | Split into 6.3a (the event pipeline, a transformation without coroutines) and 6.3b (the writer, its channel, startup order and flush triggers). | Steps 6.3a, 6.3b |
+| 2026-10-01 | 6.3 | The log code of a hook result the rules do not allow (left open in 3.2) | A new ERROR code, `HOOK_VIOLATION`, separate from `HOOK_THREW`: a misuse, not a crash. Chosen by the user. | `Code`, `docs/issue-codes.md` |
+| 2026-10-01 | 6.3 | A hook result that is not a `copy` of its input (Java can build events or subclass `Event`, left open in 3.2) | Dropped like any rule breach: `before_send`, `HOOK_VIOLATION`, throws in debug. A result is accepted only if it is a `TrackEvent`, `ScreenEvent` or `IdentifyEvent` of the input's class whose source, message id, timestamp, user id, device id and context are the input's. Chosen by the user. | `EventPipeline` |
+| 2026-10-01 | 6.3a | The shape of `ContextProvider` (2.1 allowed refining it; 7.3 implements it) | Typed values instead of maps: `StaticValues` and `CallTimeValues`, `@RubiconInternal` so `sdk-android` can build them (the public context classes have internal constructors). Each call takes the disabled fields, so the provider never reads them (Context 6); the pipeline leaves them out again whatever it gets. | `ContextProvider`, step 7.3 |
+| 2026-10-01 | 6.3a | Session events outside an event | `EventPipeline.processSessionEvents` takes the `Session Ended` produced on returning to the foreground, at process start and at a person change, so it passes the same steps as every event (hooks included). | `EventPipeline`, step 6.3b |
+| 2026-10-01 | 6.3a | Details of the steps | Static context is read once, lazily, on the worker. `library.name` is `rubicon-android`. Super properties do not merge into identify events (traits only). A hook's `null` for an app event drops it quietly (DEBUG), as decided in 4.2; a throw logs `HOOK_THREW`. An app event renamed to an invalid name by a hook is a violation. The second validation cuts strings to 1024 characters like the first. Session events take the call-time context of the event that caused them. | `EventPipeline` |
+| 2026-10-01 | 6.3b | The count trigger with events pending that cannot be sent | It counts the events appended since the last flush, starting at process start from the events left over (Queue 2: "including events left by a previous process"); any flush resets it. Counting everything pending would flush, and close a one-event segment, on every new event while offline. | `Writer` |
+| 2026-10-01 | 6.3b | Consent changes and `clearLocalData` | Their messages are added with their behaviour in 6.5 (Privacy), which owns those rules; the writer has the message channel they will use. | Step 6.5 |
+| 2026-10-01 | 6.3b | Writer details | The stores are written after every message when something changed. Lifecycle, network and person-cleared signals share the event channel, so they keep their order; if it is full they are skipped with a DEBUG line. An event created while `collecting` is off is not written. A `backpressure` drop is reported to the observer from the calling thread, since the event never reaches the writer. 6.3a and 6.3b go in one pull request, as the user asked. | `Writer` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

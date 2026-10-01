@@ -1,6 +1,9 @@
 package com.rubicon.analytics.testing
 
+import com.rubicon.analytics.ContextField
 import com.rubicon.analytics.LogLevel
+import com.rubicon.analytics.internal.context.CallTimeValues
+import com.rubicon.analytics.internal.context.StaticValues
 import com.rubicon.analytics.internal.http.TransportSettings
 import com.rubicon.analytics.internal.log.Log
 import com.rubicon.analytics.internal.platform.LifecycleSource
@@ -113,13 +116,19 @@ class FakeEnvironmentTest {
     @Nested
     inner class `context and process` {
         @Test
-        fun `the context provider returns what the test set and counts reads`() {
-            val provider = FakeContextProvider(staticValues = mapOf("os" to mapOf("name" to "Android")))
-            provider.callTimeValues = mapOf("timezone" to "Europe/Istanbul")
+        fun `the context provider returns what the test set, leaves out disabled fields and counts reads`() {
+            val provider = FakeContextProvider(staticValues = StaticValues(osName = "Android", deviceModel = "Pixel 8"))
+            provider.callTimeValues = CallTimeValues(timezone = "Europe/Istanbul", networkCarrier = "Vodafone TR")
 
-            assertEquals(mapOf("os" to mapOf("name" to "Android")), provider.staticValues())
-            assertEquals(mapOf("timezone" to "Europe/Istanbul"), provider.callTimeValues())
-            provider.callTimeValues()
+            val static = provider.staticValues(setOf(ContextField.DEVICE_MODEL))
+            val callTime = provider.callTimeValues(setOf(ContextField.NETWORK_CARRIER))
+            provider.callTimeValues(emptySet())
+
+            assertEquals("Android", static.osName)
+            assertNull(static.deviceModel)
+            assertEquals("Europe/Istanbul", callTime.timezone)
+            assertNull(callTime.networkCarrier)
+            assertEquals(emptySet<ContextField>(), provider.lastDisabled)
             assertEquals(1, provider.staticReads)
             assertEquals(2, provider.callTimeReads)
         }

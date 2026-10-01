@@ -46,6 +46,7 @@ section 15).
 | `TOO_MANY_PROPERTIES` | WARN | An event had more than 256 properties; the extra ones were dropped, super properties first. | Serialization 3 |
 | `INVALID_EVENT_NAME` | WARN | An event or screen name was blank or longer than 255 characters; the event was dropped. | Serialization 3 |
 | `HOOK_THREW` | ERROR | A `beforeSend` hook threw; the event was dropped. | Public API 4 |
+| `HOOK_VIOLATION` | ERROR | A `beforeSend` hook returned what its rules do not allow: a renamed automatic event, added or removed top-level keys, `null` for an automatic event, an invalid name, or an event that is not a `copy` of its input; the event was dropped. | Public API 4 |
 
 ## Identity
 
