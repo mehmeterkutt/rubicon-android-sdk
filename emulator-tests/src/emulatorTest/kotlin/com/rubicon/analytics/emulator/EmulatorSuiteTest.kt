@@ -216,6 +216,25 @@ class EmulatorSuiteTest {
         assertFalse(request.toString().contains("secret"))
     }
 
+    // Step 8.3: the interceptor's classes are in the SDK, OkHttp is not; nothing may load them.
+    @Test
+    fun `an app without OkHttp starts, tracks and uploads`() {
+        install("noOkhttp")
+        device.clearLogcat()
+
+        device.startActivity("MainActivity")
+        device.command("track", "--es name Without_OkHttp")
+        device.command("http")
+        Thread.sleep(1_500)
+        device.pressHome()
+
+        val events = server.await { named(it, "Without_OkHttp").isNotEmpty() && named(it, "Application Backgrounded").isNotEmpty() }
+        assertTrue(named(events, "Network Request").isEmpty())
+        val log = device.logcat()
+        assertFalse(log.contains("NoClassDefFoundError") || log.contains("ClassNotFoundException: okhttp3"), "a missing class was loaded")
+        assertFalse(log.contains("FATAL EXCEPTION"), "the app crashed")
+    }
+
     // Serialization 5: the pinned org.json behaviours of step 2.4 on this device's runtime.
     @Test
     fun `org json on this runtime behaves as the JSON layer expects`() {

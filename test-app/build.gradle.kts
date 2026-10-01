@@ -107,3 +107,23 @@ val checkR8 =
 tasks.named("check") {
     dependsOn(checkR8)
 }
+
+// Step 8.3: the noOkhttp variant must really have no OkHttp, so its emulator test means something.
+val checkNoOkhttp =
+    tasks.register("checkNoOkhttp") {
+        group = "verification"
+        description = "Fails if OkHttp reaches the runtime classpath of the noOkhttp variant."
+        val classpath = configurations.named("noOkhttpReleaseRuntimeClasspath")
+        doLast {
+            val okhttp =
+                classpath
+                    .get()
+                    .incoming.resolutionResult.allComponents
+                    .filter { it.moduleVersion?.group == "com.squareup.okhttp3" }
+            check(okhttp.isEmpty()) { "OkHttp on the noOkhttp classpath: $okhttp" }
+        }
+    }
+
+tasks.named("check") {
+    dependsOn(checkNoOkhttp)
+}
