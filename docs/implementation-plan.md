@@ -720,11 +720,11 @@ release.
 | Configuration 4 | Snapshot and freeze | 3.1 | `ConfigValidatorTest` `config snapshot`, `frozen config` |
 | Configuration 5 | Public hatches, internal `Platform`, `HttpURLConnection`, OkHttp `compileOnly` | 2.1, 5.1, 7.6 | 2.1: `FakeEnvironmentTest.test platform` (all), `TestPlatformAccessTest` |
 | Configuration 6 | No platform types in configuration | 3.1 | `ConfigJavaTest` (the whole configuration compiles and runs on the JVM) |
-| Identity 1 | `deviceId` and `userId` in files outside backup | 4.1, 6.1, 7.1 |  |
+| Identity 1 | `deviceId` and `userId` in files outside backup | 4.1, 6.1, 7.1 | 4.1: `DeviceStoreTest` `missing and unreadable`, `files left byte-identical`; `PersonStoreTest` likewise |
 | Identity 2 | Implicit merge: both ids on every event | 3.2, 6.1 | 3.2: `EventModelTest.golden files.an anonymous user is sent as a null user id` |
 | Identity 3 | One `identify`, set-only traits never stored | 6.1 |  |
 | Identity 4 | Different id means person reset, then identify | 6.1, 6.2 |  |
-| Identity 5 | `reset` clears person data only, no event | 4.1, 6.1 |  |
+| Identity 5 | `reset` clears person data only, no event | 4.1, 6.1 | 4.1: `PersonStoreTest.person json has exactly the decided keys`, `DeviceStoreTest.device json has exactly the decided keys`, `remote config json has exactly the decided keys` |
 | Identity 6 | No alias | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
 | Context 1 | Internal `ContextProvider`, `ContextStep`, nothing on the main thread | 2.1, 6.3, 7.3 |  |
 | Context 2 | Cached and signal-refreshed, captured at call time, carrier of the data SIM | 6.3, 7.2, 7.3 |  |
@@ -752,7 +752,7 @@ release.
 | Queue 6 | No public flush policy, no pause or resume | 3.3 | `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
 | Queue 7 | `flush.immediateEvents` | 3.1, 6.3 | 3.1: `ConfigValidatorTest.config snapshot` |
 | Disk 1 | Segmented append log, one segment is one batch | 4.2 |  |
-| Disk 2a | Everything under `noBackupFilesDir/rubicon/` | 4.1, 4.2, 7.1 |  |
+| Disk 2a | Everything under `noBackupFilesDir/rubicon/` | 4.1, 4.2, 7.1 | 4.1: `FileKeyValueStore` writes under `Platform.storageRoot`; `FileKeyValueStoreTest.files are app-private` |
 | Disk 2b | Fixed-width index from the directory | 4.2 |  |
 | Disk 2c | One directory per key, others deleted (`api_key_changed`) | 2.3, 4.2 | 2.3: `HttpDatesAndHashingTest.sha-256` (all) |
 | Disk 2d | Main process only | 7.1, 8.1 |  |
@@ -760,7 +760,7 @@ release.
 | Disk 4 | One `write()` per event, fsync points, `.tmp` recovery | 4.2, 7.4, 8.1 |  |
 | Disk 5 | Corrupt lines skipped, unreadable segments retried then deleted | 4.2 |  |
 | Disk 6 | No encryption, storage not replaceable | 2.1 | 2.1: `EventStore`, `KeyValueStore` are `@RubiconInternal` (opt-in error for apps); `InMemoryStoresTest` |
-| Disk 7 | Atomic person and device stores with `v` | 4.1 |  |
+| Disk 7 | Atomic person and device stores with `v` | 4.1 | `FileKeyValueStoreTest` `atomic replacement`; `PersonStoreTest` and `DeviceStoreTest` (`many updates in a row produce one write`, newer `v`) |
 | Serialization 1 | `org.json` `compileOnly`, one conversion layer | 1.1, 2.4 | 1.1: `android-json` `compileOnly` in `sdk-core`, absent from the release runtime classpath; 2.4: `JsonTest` (all), `JsonOnAndroidTest` |
 | Serialization 2 | Conversion table, no `java.time` | 2.5, 1.1 | 1.1: `SourceScannerTest.java time rule` (all), `SourceRulesPluginTest.check fails on a planted java time import and names the file and line`; 2.5: `PropertyNormalizerTest.conversion table` (all) |
 | Serialization 3 | Size limits | 2.5, 6.3 | 2.5: `PropertyNormalizerTest` `property keys`, `string values`, `nesting depth`, `property count`, `event names` |
@@ -776,10 +776,10 @@ release.
 | Retry 2 | Backoff table with jitter, 1 h for configuration problems | 5.2 |  |
 | Retry 3 | `Retry-After` cap and floor, poison-batch rule | 2.3, 5.2, 6.4 | 2.3: `HttpDatesAndHashingTest.http dates` (all) |
 | Retry 4 | 413 as configuration problem, server answers 200 | 5.2 |  |
-| Retry 5 | Pipeline wait and per-segment attempts persisted, clock guard | 4.1, 5.2 |  |
+| Retry 5 | Pipeline wait and per-segment attempts persisted, clock guard | 4.1, 5.2 | 4.1: `DeviceStoreTest.the state and the cache read back as written` (retry object) |
 | Retry 6 | One default-network callback, `INTERNET` without `VALIDATED` | 7.2 |  |
 | Privacy 1 | `optOut` stops new events, queue still sends | 6.5, 7.6 |  |
-| Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3, 6.5 |  |
+| Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3, 6.5 | 4.1: `DeviceStoreTest.consent is null, granted or denied` |
 | Privacy 3 | `clearLocalData`, read-only `deviceId` | 6.5 |  |
 | Privacy 4 | `Consent` `GRANTED`/`PENDING` | 3.1, 6.5 | 3.1: `ConfigValidatorTest.default values` |
 | Privacy 5a | No field presets, checklist in the guide | 8.5 |  |
@@ -790,7 +790,7 @@ release.
 | Logging 2 | Levels, default `WARN`, repeat limit, no runtime setter | 2.2 | `LogTest.repeat limit` (all), `IssueCodesTest` |
 | Logging 3 | Inline gating | 2.2 | `LogTest.level gating` (all) |
 | Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3, 6.4 | 1.1: `SourceScannerTest.println rule` (all); 2.2: `SourceScannerTest.values in log rule` (all), `LogTest.throwing logger`, `LogTest.event observer`, `LogTest.re-entrancy` (all); 3.2: `EventJavaTest.anObserverIsAJavaLambda`, `EventModelTest.safe descriptions` |
-| Logging 5 | `SDK Diagnostics` | 6.6, 5.3 |  |
+| Logging 5 | `SDK Diagnostics` | 4.1, 6.6, 5.3 | 4.1: `DeviceStoreTest` `diagnostics counters` |
 
 ## 14. Status
 
@@ -806,7 +806,7 @@ release.
 - [x] 3.1 Configuration
 - [x] 3.2 Event model and public types
 - [x] 3.3 The `Analytics` interface
-- [ ] 4.1 Key-value stores
+- [x] 4.1 Key-value stores
 - [ ] 4.2 Event store
 - [ ] 5.1 HTTP transport
 - [ ] 5.2 Retry policy and backoff
@@ -893,6 +893,12 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 3.2 | What a hook may change on an automatic event | Public API 4 said hooks run on every event. Now: on the app's events (`source = APP`) a hook may change the name, keys and values or drop the event; on automatic events (`source = AUTO`) only property values, including to `null` or another type and anything nested, with the same name and the same top-level keys and no `null` result. Context stays read-only for both. A breach drops the event (`before_send`) and throws in debug; its log code is settled in 6.3. `SDK Diagnostics` never reaches hooks. Automatic events are switched off through `autocapture.enabled`, automatic screens named with `@ScreenName`. | Public API 4, Privacy 5b (Confluence); `Event.kt`, `AnalyticsConfig.beforeSend`, root `CLAUDE.md`; steps 6.3, 8.5 |
 | 2026-10-01 | 3.3 | What the no-op instance reports | `NoOpAnalytics.isOptedOut()` is `true`, since nothing is sent (the meaning Privacy 4 gives it); `deviceId` is `""`, since there is no installation id, and an erasure request with it is plainly invalid instead of hitting a real or shared id. Asked and answered by the user. | `NoOpAnalytics` KDoc |
 | 2026-10-01 | 3.3 | Default arguments on `Analytics` | `track`, `screen` and `identify` default their map to `emptyMap()`; Kotlin compiles this into `Analytics$DefaultImpls` with synthetic `$default` helpers, which appear in the `.api` file. Java passes every argument (Public API 7). | - |
+| 2026-10-01 | 4.1 | Shapes inside `device.json` the decisions leave open | `retry`: `paused_until`, `pause_kind` (`transient`, `throttle`, `config`), `step`, `last_failure`, `batches` (segment name to failed attempts), as Retry 5 lists them. `diagnostics`: `period_start`, `last_sent_at` (epoch ms), `dropped` (reason wire name to count) and `issues` (code to count). `consent`: `null`, `granted` or `denied`. Counts saturate at `Int.MAX_VALUE`. | `DeviceStore` |
+| 2026-10-01 | 4.1 | Shape of `remote-config.json` | `{"v":1,"etag":..,"values":{..}}`; step 5.3 decides what `values` holds and may refine it. | `DeviceStore`, step 5.3 |
+| 2026-10-01 | 4.1 | What makes a store file unreadable | Not valid UTF-8, not a JSON object, a `v` other than 1, a required field missing (`device_id`, a session's `id`, `started_at`, `last_activity`) or any field of the wrong type, including an unknown `consent` or `pause_kind`. An optional field that is absent or `null` takes its default. | `StoreFields` |
+| 2026-10-01 | 4.1 | `remote-config.json` unreadable | Treated like the other stores: no cache for the process and never overwritten, so a downgrade cannot destroy it (Disk 7). | `DeviceStore` |
+| 2026-10-01 | 4.1 | Counters before `DeviceStore` is loaded | The `Log` counts through `DeviceStore.issueCounter` from the start; counts made before `load` (such as `STORE_UNREADABLE` for `device.json` itself) are kept in memory and added at `load`. | `DeviceStore` |
+| 2026-10-01 | 4.1 | App-private files | `FileSystem.openWrite` and `openAppend` restrict a file to its owner (`rw-------`); Android's app directories are private already. A leftover store `.tmp` is deleted on the first read of that store, which is on the writer at startup. | `FileSystem`, `FileKeyValueStore` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

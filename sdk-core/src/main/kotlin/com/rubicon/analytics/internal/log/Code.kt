@@ -81,7 +81,7 @@ public enum class Code {
 
     // Storage
 
-    /** WARN. `device.json` or `person.json` exists but cannot be read; it is left untouched. */
+    /** WARN. `device.json`, `person.json` or `remote-config.json` exists but cannot be read; it is left untouched. */
     STORE_UNREADABLE,
 
     /** ERROR. An event or a store could not be written. */

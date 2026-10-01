@@ -57,7 +57,7 @@ section 15).
 
 | Code | Level | Meaning | Decision |
 |---|---|---|---|
-| `STORE_UNREADABLE` | WARN | `device.json` or `person.json` exists but cannot be read; in-memory values are used and the file is left untouched. | Identity 1, Disk 7 |
+| `STORE_UNREADABLE` | WARN | `device.json`, `person.json` or `remote-config.json` exists but cannot be read; in-memory values are used and the file is left untouched. | Identity 1, Disk 7 |
 | `STORAGE_WRITE_FAILED` | ERROR | An event or a store could not be written, for example on a full disk. | Disk 4, Logging 2 |
 | `CORRUPT_LINE` | ERROR | A stored event line was corrupt and was skipped. | Disk 5 |
 | `UNREADABLE_SEGMENT` | ERROR | A segment could not be read; it is deleted after three consecutive failures. | Disk 5 |

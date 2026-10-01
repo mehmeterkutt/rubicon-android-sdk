@@ -25,10 +25,10 @@ public interface FileSystem {
 
     public fun openRead(file: File): InputStream
 
-    /** Opens [file] for appending, creating it if needed. */
+    /** Opens [file] for appending, creating it if needed; only the app may read or write it. */
     public fun openAppend(file: File): FileSink
 
-    /** Opens [file] for writing from the start, replacing its content. */
+    /** Opens [file] for writing from the start, replacing its content; only the app may read or write it. */
     public fun openWrite(file: File): FileSink
 
     /** Renames [from] over [to], replacing it. */
@@ -64,9 +64,18 @@ private object JavaIoFileSystem : FileSystem {
 
     override fun openRead(file: File): InputStream = FileInputStream(file)
 
-    override fun openAppend(file: File): FileSink = StreamSink(FileOutputStream(file, true))
+    override fun openAppend(file: File): FileSink = StreamSink(FileOutputStream(file, true)).also { restrictToOwner(file) }
 
-    override fun openWrite(file: File): FileSink = StreamSink(FileOutputStream(file, false))
+    override fun openWrite(file: File): FileSink = StreamSink(FileOutputStream(file, false)).also { restrictToOwner(file) }
+
+    // Android's app directories are private already; this keeps a file private on any file system.
+    private fun restrictToOwner(file: File) {
+        file.setReadable(false, false)
+        file.setReadable(true, true)
+        file.setWritable(false, false)
+        file.setWritable(true, true)
+        file.setExecutable(false, false)
+    }
 
     override fun rename(
         from: File,
