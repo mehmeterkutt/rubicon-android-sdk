@@ -1,8 +1,10 @@
 package com.rubicon.analytics.internal.config
 
 import com.rubicon.analytics.Autocapture
+import com.rubicon.analytics.BeforeSend
 import com.rubicon.analytics.Consent
 import com.rubicon.analytics.ContextField
+import com.rubicon.analytics.EventObserver
 import com.rubicon.analytics.LogLevel
 import com.rubicon.analytics.RubiconLogger
 
@@ -15,6 +17,7 @@ internal data class ConfigSnapshot(
     val apiKey: String,
     val host: String,
     val debug: Boolean,
+    val beforeSend: List<BeforeSend>,
     val flushAt: Int,
     val flushIntervalMs: Long,
     val immediateEvents: Set<String>,
@@ -25,6 +28,7 @@ internal data class ConfigSnapshot(
     val persistConsent: Boolean,
     val logLevel: LogLevel,
     val logger: RubiconLogger?,
+    val eventObserver: EventObserver?,
     val sendDiagnostics: Boolean,
     val headers: Map<String, String>,
 ) {

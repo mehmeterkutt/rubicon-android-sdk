@@ -480,7 +480,8 @@ never sees it, and `jvmTarget` does not restrict the Java API.
   `ImmediateEventTrigger` (exact, case-sensitive final name after hooks, flush after persisting,
   DEBUG line). No startup flush and no periodic timer.
 - Tests: order of calls from one thread is kept; a hook that drops, throws, renames or adds
-  properties, and one that returns an invalid property; the observer sees `Queued` for exactly the
+  properties, one that returns an invalid property, and one that returns an event it built itself
+  or of a foreign subclass (section 15, step 3.2); the observer sees `Queued` for exactly the
   persisted events; channel full counts `backpressure` without blocking the caller; every trigger
   fires once and only when its condition holds; `flush()` includes all earlier events.
 
@@ -696,18 +697,18 @@ release.
 | Public API 1 | Developer holds one instance per process, no singleton | 6.7, 7.1 |  |
 | Public API 2 | `Analytics` interface, internal implementation, factory | 3.3, 6.7, 7.1 |  |
 | Public API 3 | `Map<String, Any?>` validated at the boundary | 2.5 | `PropertyNormalizerTest` (all) |
-| Public API 4 | `beforeSend` list fixed at creation, fail-closed | 3.2, 6.3 |  |
+| Public API 4 | `beforeSend` list fixed at creation, fail-closed | 3.2, 6.3 | 3.2: `EventJavaTest.aHookIsAJavaLambdaThatCopiesOrDrops`, `ConfigValidatorTest.config snapshot` |
 | Public API 5 | Public methods return `Unit` | 3.3 |  |
 | Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1, 2.1 | Build: `sdk-core` is `kotlin("jvm")`, `sdk-android` depends on it with `api`; `BuildInfoTest`, `RobolectricSetupTest`; 2.1: `TestPlatformAccessTest` |
 | Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 | 1.1: `explicitApi()` and `apiCheck` in `check` (gates); 3.1: `ConfigJavaTest` |
 | Public API 8 | Vocabulary and read-only `deviceId` | 3.3, 6.1, 6.5 |  |
 | Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3, 6.7 |  |
-| Event Model 1 | Top level, `properties`/`traits`, `context` ownership | 3.2, 6.3 |  |
-| Event Model 2 | Sealed `TrackEvent`, `ScreenEvent`, `IdentifyEvent`; `type` on the wire | 3.2, 8.4 |  |
+| Event Model 1 | Top level, `properties`/`traits`, `context` ownership | 3.2, 6.3 | 3.2: `EventModelTest.golden files` (all) |
+| Event Model 2 | Sealed `TrackEvent`, `ScreenEvent`, `IdentifyEvent`; `type` on the wire | 3.2, 8.4 | 3.2: `EventModelTest.golden files` (all) |
 | Event Model 3 | Immutable normalized maps, validated twice | 2.5, 6.3 | 2.5: `PropertyNormalizerTest.deep copies` (all) |
 | Event Model 4 | `message_id` UUIDv7, never regenerated | 2.3, 6.3, 6.4 | 2.3: `UuidV7GeneratorTest` (all) |
 | Event Model 5 | Epoch ms, ISO dates in properties, `sent_at` per attempt | 2.3, 6.4 | 2.3: `IsoDatesTest` (all) |
-| Event Model 6 | Public classes, internal constructors, limited `copy` | 3.2 |  |
+| Event Model 6 | Public classes, internal constructors, limited `copy` | 3.2 | `EventModelTest` `limited copy`, `read-only for hooks`, `safe descriptions`; `EventJavaTest.copyHasJavaOverloads` |
 | Configuration 1 | Code plus restrict-only remote, allowlist, next launch, two immediate flags | 5.3 |  |
 | Configuration 2 | One class, small groups, tuning internal | 3.1 | `ConfigValidatorTest.default values` (all), `ConfigJavaTest` |
 | Configuration 3 | Only `apiKey` required, factory validation, one instance, main process | 3.1, 6.7, 7.1 | 3.1: `ConfigValidatorTest` `api key`, `host url`, `numeric bounds`, `custom headers` |
@@ -715,7 +716,7 @@ release.
 | Configuration 5 | Public hatches, internal `Platform`, `HttpURLConnection`, OkHttp `compileOnly` | 2.1, 5.1, 7.6 | 2.1: `FakeEnvironmentTest.test platform` (all), `TestPlatformAccessTest` |
 | Configuration 6 | No platform types in configuration | 3.1 | `ConfigJavaTest` (the whole configuration compiles and runs on the JVM) |
 | Identity 1 | `deviceId` and `userId` in files outside backup | 4.1, 6.1, 7.1 |  |
-| Identity 2 | Implicit merge: both ids on every event | 3.2, 6.1 |  |
+| Identity 2 | Implicit merge: both ids on every event | 3.2, 6.1 | 3.2: `EventModelTest.golden files.an anonymous user is sent as a null user id` |
 | Identity 3 | One `identify`, set-only traits never stored | 6.1 |  |
 | Identity 4 | Different id means person reset, then identify | 6.1, 6.2 |  |
 | Identity 5 | `reset` clears person data only, no event | 4.1, 6.1 |  |
@@ -723,7 +724,7 @@ release.
 | Context 1 | Internal `ContextProvider`, `ContextStep`, nothing on the main thread | 2.1, 6.3, 7.3 |  |
 | Context 2 | Cached and signal-refreshed, captured at call time, carrier of the data SIM | 6.3, 7.2, 7.3 |  |
 | Context 3 | Twenty fields, unknown omitted (list to be revisited) | 7.3, 8.4 |  |
-| Context 4 | Everything in `context`, read-only for hooks | 3.2 |  |
+| Context 4 | Everything in `context`, read-only for hooks | 3.2 | `EventModelTest.read-only for hooks` (all), `EventJavaTest.contextIsReadThroughGetters` |
 | Context 5 | `register`/`unregister`, validated at registration | 2.5, 6.1 | 2.5: `PropertyNormalizerTest.property count` (super properties dropped first) |
 | Context 6 | `context.disabledFields`, never read when disabled | 3.1, 7.3 | 3.1: `ConfigValidatorTest.default values` (18 values, no `LIBRARY_*`) |
 | Session 1 | SDK computes sessions, on every event | 6.2 |  |
@@ -736,7 +737,7 @@ release.
 | Lifecycle 2 | `ProcessLifecycleOwner`, `AppInitializer` | 7.4 |  |
 | Lifecycle 3 | Activity screens, `@ScreenName`, `name_source` | 7.5 |  |
 | Lifecycle 4 | Install and update detection | 7.4 |  |
-| Lifecycle 5 | Plain names, `source` `app`/`auto` | 3.2, 7.4 |  |
+| Lifecycle 5 | Plain names, `source` `app`/`auto` | 3.2, 7.4 | 3.2: `EventModelTest.wire names` |
 | Lifecycle 6 | `Autocapture` set and defaults, `NETWORK_REQUESTS` off at once | 3.1, 5.3, 7.4, 7.6 | 3.1: `ConfigValidatorTest.default values` |
 | Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3, 6.4 |  |
 | Queue 2 | Flush triggers and suppression, no WorkManager | 6.3, 6.4, 7.4 |  |
@@ -758,8 +759,8 @@ release.
 | Serialization 1 | `org.json` `compileOnly`, one conversion layer | 1.1, 2.4 | 1.1: `android-json` `compileOnly` in `sdk-core`, absent from the release runtime classpath; 2.4: `JsonTest` (all), `JsonOnAndroidTest` |
 | Serialization 2 | Conversion table, no `java.time` | 2.5, 1.1 | 1.1: `SourceScannerTest.java time rule` (all), `SourceRulesPluginTest.check fails on a planted java time import and names the file and line`; 2.5: `PropertyNormalizerTest.conversion table` (all) |
 | Serialization 3 | Size limits | 2.5, 6.3 | 2.5: `PropertyNormalizerTest` `property keys`, `string values`, `nesting depth`, `property count`, `event names` |
-| Serialization 4 | snake_case, epoch ms, own ISO formatter | 2.3, 3.2 | 2.3: `IsoDatesTest` (all) |
-| Serialization 5 | Streamed body, golden files, independent parser | 2.4, 3.2, 6.4, 8.4 | 2.4: `JsonTest.round trip` (independent parser), `JsonOnAndroidTest` (Android's `org.json`) |
+| Serialization 4 | snake_case, epoch ms, own ISO formatter | 2.3, 3.2 | 2.3: `IsoDatesTest` (all); 3.2: `EventModelTest.golden files` |
+| Serialization 5 | Streamed body, golden files, independent parser | 2.4, 3.2, 6.4, 8.4 | 2.4: `JsonTest.round trip` (independent parser), `JsonOnAndroidTest` (Android's `org.json`); 3.2: golden `track.json`, `screen.json`, `identify.json` |
 | HTTP 1 | `HttpURLConnection` behind `HttpTransport` | 5.1 |  |
 | HTTP 2 | Always gzip, `Content-Length` | 5.1 |  |
 | HTTP 3 | 15 s / 20 s / 45 s watchdog | 5.1 |  |
@@ -783,7 +784,7 @@ release.
 | Logging 1 | `RubiconLogger`, instance-owned, Logcat default | 2.2, 7.1 | 2.2: `LogTest.log lines` (all), `LoggingJavaTest` |
 | Logging 2 | Levels, default `WARN`, repeat limit, no runtime setter | 2.2 | `LogTest.repeat limit` (all), `IssueCodesTest` |
 | Logging 3 | Inline gating | 2.2 | `LogTest.level gating` (all) |
-| Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3, 6.4 | 1.1: `SourceScannerTest.println rule` (all); 2.2: `SourceScannerTest.values in log rule` (all), `LogTest.throwing logger`, `LogTest.event observer`, `LogTest.re-entrancy` (all) |
+| Logging 4 | Content rule, isolation, `eventObserver` | 1.1, 2.2, 3.2, 6.3, 6.4 | 1.1: `SourceScannerTest.println rule` (all); 2.2: `SourceScannerTest.values in log rule` (all), `LogTest.throwing logger`, `LogTest.event observer`, `LogTest.re-entrancy` (all); 3.2: `EventJavaTest.anObserverIsAJavaLambda`, `EventModelTest.safe descriptions` |
 | Logging 5 | `SDK Diagnostics` | 6.6, 5.3 |  |
 
 ## 14. Status
@@ -798,7 +799,7 @@ release.
 - [x] 2.4 JSON layer
 - [x] 2.5 Property validation and normalization
 - [x] 3.1 Configuration
-- [ ] 3.2 Event model and public types
+- [x] 3.2 Event model and public types
 - [ ] 3.3 The `Analytics` interface
 - [ ] 4.1 Key-value stores
 - [ ] 4.2 Event store
@@ -879,6 +880,11 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 3.1 | What an invalid `host` is | Not an `http` or `https` URL with a host name, or one with a query, fragment, user info or surrounding whitespace (never trimmed). Trailing slashes are removed; `http://` warns (`CLEARTEXT_HOST`) in both modes. | `sdk-core/CLAUDE.md` Configuration |
 | 2026-10-01 | 3.1 | `beforeSend` and `logging.eventObserver` need the types of 3.2 | Added in 3.2 with `BeforeSend`, `Event` and `EventObserver`; adding a property to a builder is compatible. | Steps 3.1 and 3.2 |
 | 2026-10-01 | 3.1 | Surface kept to the decisions | No public constant of the `Autocapture` defaults; `toString` of the config and the snapshot never shows the API key or header values. | - |
+| 2026-10-01 | 3.2 | Shape of `EventContext` | Typed groups as public classes with internal constructors: `app` (`name`, `version`, `build`, `namespace`), `device` (`manufacturer`, `model`, `type`, `isEmulator`), `os` (`name`, `version`, `apiLevel`), `screen` (`width`, `height`, `density`), `network` (`type`, `carrier`), `session` (`id`, `startedAt`, nullable group), `library` (`name`, `version`), and `locale`, `timezone`. Values are nullable and omitted on the wire when `null`; `device.type` and `network.type` are strings. | - |
+| 2026-10-01 | 3.2 | `user_id` of an anonymous user | Always on the wire, `null` while anonymous; it is part of the event's identity, not a context value. | - |
+| 2026-10-01 | 3.2 | An event name that is blank or over 255 characters | No new `DropReason` and no `Dropped` update: the event is never created. Debug throws; release logs `INVALID_EVENT_NAME`, counted in `SDK Diagnostics`. | - |
+| 2026-10-01 | 3.2 | Wire names | `EventSource` `APP`/`AUTO` as `app`/`auto`; `DropReason` values as their lower-case names (`queue_full`). Golden files in `sdk-core/src/test/resources/golden`. | - |
+| 2026-10-01 | 3.2 | Java can bypass `internal` | Kotlin compiles internal constructors as public, and the sealed `Event` has a public synthetic constructor, so Java code can build an event or subclass `Event`. Step 6.3 must not trust a hook's result: it is accepted only if it is a `TrackEvent`, `ScreenEvent` or `IdentifyEvent` whose source, message id, timestamp, user id, device id and context are those of the input. What happens otherwise is to be decided in 6.3. | Step 6.3 |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

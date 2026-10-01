@@ -2,8 +2,10 @@ package com.rubicon.analytics.internal.config
 
 import com.rubicon.analytics.AnalyticsConfig
 import com.rubicon.analytics.Autocapture
+import com.rubicon.analytics.BeforeSend
 import com.rubicon.analytics.Consent
 import com.rubicon.analytics.ContextField
+import com.rubicon.analytics.EventObserver
 import com.rubicon.analytics.LogLevel
 import com.rubicon.analytics.RubiconLogger
 import com.rubicon.analytics.internal.log.Code
@@ -14,6 +16,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -50,6 +53,8 @@ class ConfigValidatorTest {
             assertEquals("https://api.rubicon.example", config.host)
             assertEquals(AnalyticsConfig.DEFAULT_HOST, config.host)
             assertFalse(config.debug)
+            assertEquals(emptyList<BeforeSend>(), config.beforeSend)
+            assertNull(config.logging.eventObserver)
             assertEquals(30, config.flush.at)
             assertEquals(60_000L, config.flush.intervalMs)
             assertEquals(emptySet<String>(), config.flush.immediateEvents)
@@ -309,10 +314,15 @@ class ConfigValidatorTest {
         @Test
         fun `every value reaches the snapshot`() {
             val customLogger = RubiconLogger { _, _, _ -> }
+            val hook = BeforeSend { it }
+            val observer = EventObserver { }
+            val hooks = mutableListOf(hook)
             val snapshot =
                 start(
                     config {
                         debug = true
+                        beforeSend = hooks
+                        logging.eventObserver = observer
                         flush.immediateEvents = setOf("Purchase")
                         autocapture.enabled = setOf(Autocapture.DEEP_LINKS)
                         context.disabledFields = setOf(ContextField.LOCALE)
@@ -325,6 +335,9 @@ class ConfigValidatorTest {
                 )!!
 
             assertTrue(snapshot.debug)
+            hooks += BeforeSend { null }
+            assertEquals(listOf(hook), snapshot.beforeSend)
+            assertSame(observer, snapshot.eventObserver)
             assertEquals(setOf(Autocapture.DEEP_LINKS), snapshot.autocapture)
             assertEquals(setOf(ContextField.LOCALE), snapshot.disabledFields)
             assertEquals(Consent.PENDING, snapshot.defaultConsent)
@@ -365,6 +378,8 @@ class ConfigValidatorTest {
                 Long::class.javaPrimitiveType -> 5_000L
                 Set::class.java -> emptySet<Any>()
                 Map::class.java -> emptyMap<Any, Any>()
+                List::class.java -> emptyList<Any>()
+                EventObserver::class.java -> EventObserver { }
                 LogLevel::class.java -> LogLevel.ERROR
                 Consent::class.java -> Consent.PENDING
                 RubiconLogger::class.java -> RubiconLogger { _, _, _ -> }
@@ -372,9 +387,9 @@ class ConfigValidatorTest {
             }
 
         @Test
-        fun `there are 14 settings with a setter`() {
-            // With apiKey, and beforeSend and eventObserver from step 3.2: 17 public settings.
-            assertEquals(14, setters(config()).size)
+        fun `there are 16 settings with a setter`() {
+            // With apiKey, 17 public settings (Configuration 2, without the removed remote group).
+            assertEquals(16, setters(config()).size)
         }
 
         @Test
@@ -410,7 +425,7 @@ class ConfigValidatorTest {
             assertEquals(AnalyticsConfig.DEFAULT_HOST, config.host)
             assertEquals(LogLevel.WARN, config.logging.level)
             assertEquals(1, logger.lines.count { it.level == LogLevel.WARN })
-            assertEquals(14, counted.count { it == Code.CONFIG_FROZEN })
+            assertEquals(16, counted.count { it == Code.CONFIG_FROZEN })
             assertTrue(logger.messages.first().contains("was changed after the SDK was created"))
         }
     }

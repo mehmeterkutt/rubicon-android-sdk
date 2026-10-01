@@ -1,0 +1,13 @@
+{
+  "type": "identify",
+  "source": "app",
+  "message_id": "0192e4a1-5a1d-7e0f-8b2c-1d3e5f7a9b0c",
+  "timestamp": 1759147100000,
+  "user_id": "user-42",
+  "device_id": "0191d0c2-1a2b-7c3d-9e4f-5a6b7c8d9e0f",
+  "traits": { "plan": "pro", "signup_at": "2026-09-01T12:00:00.000Z" },
+  "context": {
+    "os": { "name": "Android", "version": "16", "api_level": 36 },
+    "library": { "name": "rubicon-android", "version": "0.1.0" }
+  }
+}

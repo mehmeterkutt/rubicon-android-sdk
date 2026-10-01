@@ -86,6 +86,7 @@ internal object ConfigValidator {
                     apiKey = config.apiKey,
                     host = host,
                     debug = config.debug,
+                    beforeSend = Collections.unmodifiableList(ArrayList(config.beforeSend)),
                     flushAt = flushAt,
                     flushIntervalMs = flushIntervalMs,
                     immediateEvents = Collections.unmodifiableSet(LinkedHashSet(config.flush.immediateEvents)),
@@ -96,6 +97,7 @@ internal object ConfigValidator {
                     persistConsent = config.privacy.persistConsent,
                     logLevel = config.logging.level,
                     logger = config.logging.logger,
+                    eventObserver = config.logging.eventObserver,
                     sendDiagnostics = config.logging.sendDiagnostics,
                     headers = headers,
                 )

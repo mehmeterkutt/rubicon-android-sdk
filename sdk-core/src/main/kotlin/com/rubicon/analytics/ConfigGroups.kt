@@ -111,6 +111,16 @@ public class LoggingConfig internal constructor(
     public var logger: RubiconLogger? by freezer.setting(null)
 
     /**
+     * Hears what became of each event: queued, sent or dropped (Logging 4c). Default `null`. Meant
+     * for QA screens in debug builds and for tests.
+     *
+     * ```
+     * if (BuildConfig.DEBUG) logging.eventObserver = EventObserver { update -> qaScreen.show(update) }
+     * ```
+     */
+    public var eventObserver: EventObserver? by freezer.setting(null)
+
+    /**
      * Whether the SDK sends the automatic `SDK Diagnostics` event, at most once an hour and only
      * when it dropped events or met problems. Default `true`.
      */
