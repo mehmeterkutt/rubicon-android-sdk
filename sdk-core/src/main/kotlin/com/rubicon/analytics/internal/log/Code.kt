@@ -164,6 +164,6 @@ public enum class Code {
 
     // Lifecycle
 
-    /** WARN. Observing the app's foreground failed; no lifecycle events, sessions or background flush. */
+    /** WARN. Neither ProcessLifecycleOwner nor the activity counter can observe the foreground; no lifecycle events or sessions. */
     LIFECYCLE_UNAVAILABLE,
 }

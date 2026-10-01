@@ -88,6 +88,17 @@ internal class AndroidNetworkMonitor(
                 if (changed) networkChanged()
             }
 
+            // Below API 26 a new network may arrive with onAvailable alone, no capabilities callback.
+            override fun onAvailable(network: Network) {
+                val capabilities =
+                    try {
+                        connectivity()?.getNetworkCapabilities(network)
+                    } catch (t: Throwable) {
+                        null
+                    }
+                if (capabilities != null) onCapabilitiesChanged(network, capabilities) else query()?.let(::update)
+            }
+
             override fun onLost(network: Network) {
                 // Below API 24 the request may cover several networks: ask what is left.
                 lastNetwork = null

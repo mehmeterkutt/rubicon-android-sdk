@@ -114,6 +114,24 @@ class AndroidNetworkMonitorTest {
         assertEquals("cellular", monitor.networkType)
     }
 
+    // Below API 26 a returning network may report onAvailable alone.
+    @Test
+    fun `a network that comes back with onAvailable alone is seen`() {
+        val monitor = monitor()
+        monitor.start(log)
+        active(null)
+        registered.captured.onLost(network)
+        val back = mockk<Network>()
+        every { manager.getNetworkCapabilities(back) } returns
+            capabilities(internet = true, transport = NetworkCapabilities.TRANSPORT_CELLULAR)
+
+        registered.captured.onAvailable(back)
+
+        assertEquals(listOf(false, true), changes)
+        assertTrue(monitor.isConnected())
+        assertEquals("cellular", monitor.networkType)
+    }
+
     @Test
     fun `internet without validation counts as connected`() {
         val monitor = monitor()

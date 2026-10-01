@@ -1,6 +1,10 @@
 package com.rubicon.analytics.internal.android
 
+import android.app.Activity
 import android.app.Application
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Looper
 import androidx.lifecycle.Lifecycle
@@ -16,9 +20,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.time.Duration
 
 // Lifecycle 2, Session 3.
 @RunWith(RobolectricTestRunner::class)
@@ -56,7 +62,7 @@ class AndroidLifecycleSourceTest {
                 owner
             }, { calls += "initialize" })
 
-        source.start(log)
+        source.attach()
 
         assertEquals(listOf("initialize", "owner"), calls)
     }
@@ -65,7 +71,7 @@ class AndroidLifecycleSourceTest {
     fun `ON_START is the foreground and ON_STOP the background, each told once`() {
         val owner = TestOwner()
         val source = AndroidLifecycleSource(app, { owner }).also { it.addListener(recorder) }
-        source.start(log)
+        source.attach()
 
         owner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         owner.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
@@ -83,7 +89,7 @@ class AndroidLifecycleSourceTest {
         owner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         val source = AndroidLifecycleSource(app, { owner }).also { it.addListener(recorder) }
 
-        source.start(log)
+        source.attach()
 
         assertTrue(source.isForeground)
         assertEquals(listOf("foreground"), changes)
@@ -95,7 +101,7 @@ class AndroidLifecycleSourceTest {
         owner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         val source = AndroidLifecycleSource(app, { owner })
 
-        val worker = Thread { source.start(log) }
+        val worker = Thread { source.attach() }
         worker.start()
         worker.join()
         assertFalse(source.isForeground)
@@ -104,17 +110,74 @@ class AndroidLifecycleSourceTest {
         assertTrue(source.isForeground)
     }
 
-    @Test
-    fun `a failure leaves it in the background with one warning`() {
-        val source = AndroidLifecycleSource(app, { owner() }, { throw IllegalStateException("no Startup") })
+    // Lifecycle 2.6+ with androidx Startup's provider removed.
+    private fun withoutStartup(context: Context = app) =
+        AndroidLifecycleSource(context, { TestOwner() }, { throw IllegalStateException("cannot be initialized lazily") })
+            .also { it.addListener(recorder) }
 
+    @Test
+    fun `when the owner cannot be initialized, activities are counted, with one INFO line`() {
+        val source = withoutStartup()
+        source.start(log)
+        source.attach()
+
+        val first = Robolectric.buildActivity(Activity::class.java).setup()
+        assertTrue(source.isForeground)
+        first.pause().stop()
+        val second = Robolectric.buildActivity(Activity::class.java).setup()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+        assertTrue("a move between activities is not a background", source.isForeground)
+        second.pause().stop()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(AndroidLifecycleSource.BACKGROUND_DELAY_MS - 1))
+        assertTrue("the background waits for the delay", source.isForeground)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
+
+        assertFalse(source.isForeground)
+        assertEquals(listOf("foreground", "background"), changes)
+        assertEquals(1, logger.lines.count { it.level == LogLevel.INFO && it.message.contains("detected from activities") })
+        assertEquals(0, logger.lines.count { it.level == LogLevel.WARN })
+    }
+
+    @Test
+    fun `the counter does not count a rotation`() {
+        val source = withoutStartup()
+        source.attach()
+        val activity = Robolectric.buildActivity(Activity::class.java).setup()
+
+        activity.configurationChange(Configuration(app.resources.configuration).apply { orientation = Configuration.ORIENTATION_LANDSCAPE })
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+        assertTrue(source.isForeground)
+        activity.pause().stop()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+
+        assertEquals(listOf("foreground", "background"), changes)
+    }
+
+    @Test
+    fun `the log line comes even when the log arrives after the attach`() {
+        val source = withoutStartup()
+        source.attach()
+
+        source.start(log)
+        source.start(log)
+
+        assertEquals(1, logger.lines.count { it.level == LogLevel.INFO && it.message.contains("detected from activities") })
+    }
+
+    @Test
+    fun `without an Application it stays in the background with one warning`() {
+        val notAnApp =
+            object : ContextWrapper(app) {
+                override fun getApplicationContext(): Context = this
+            }
+        val source = withoutStartup(notAnApp)
+
+        source.attach()
         source.start(log)
 
         assertFalse(source.isForeground)
         assertEquals(1, logger.lines.count { it.level == LogLevel.WARN && it.message.startsWith("LIFECYCLE_UNAVAILABLE") })
     }
-
-    private fun owner(): LifecycleOwner = TestOwner()
 
     // The real ProcessLifecycleOwner is a static singleton bound to the first Application of the
     // Robolectric sandbox, so tests with it depend on their order; it is covered, with and without

@@ -32,10 +32,13 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
   `SCREEN_VIEWS`, `NETWORK_REQUESTS` on; `DEEP_LINKS` off.
 - The core's `AppLifecycle` makes these events on the writer; this module only reports `ON_START`
   and `ON_STOP` (`AndroidLifecycleSource`) and the package facts (`ProcessInfo.installedApp()`).
-- Foreground and background come from `ProcessLifecycleOwner`; the observer is added on the main
-  thread (post if needed). Always call
+- Foreground and background come from `ProcessLifecycleOwner`; the observer is added when the SDK is
+  created (`AndroidLifecycleSource.attach()` in the factory), on the main thread (post if needed), so
+  a cold start's first screen is inside the session. Always call
   `AppInitializer...initializeComponent(ProcessLifecycleInitializer)` in case the app removed the
-  Startup provider (Lifecycle 2).
+  Startup provider; lifecycle 2.6+ then throws, and an activity counter takes over (700 ms to the
+  background, rotation not counted, one INFO) (Lifecycle 2).
+- Network callbacks below API 26 may report a returning network with `onAvailable` alone: handle it.
 - Install and update (Lifecycle 4) are evaluated on the first foreground of a process, with state in
   `DeviceStore` (version, build). No record and `firstInstallTime == lastUpdateTime` -> Installed; no
   record otherwise -> Updated without previous version; a different build -> Updated

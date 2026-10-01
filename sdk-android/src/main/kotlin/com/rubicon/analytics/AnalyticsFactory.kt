@@ -6,6 +6,7 @@ import android.content.Context
 import com.rubicon.analytics.internal.NoOpAnalytics
 import com.rubicon.analytics.internal.RubiconCore
 import com.rubicon.analytics.internal.android.ActivityCapture
+import com.rubicon.analytics.internal.android.AndroidLifecycleSource
 import com.rubicon.analytics.internal.android.AndroidPlatform
 import com.rubicon.analytics.internal.android.AndroidProcessInfo
 import com.rubicon.analytics.internal.android.LogcatLogger
@@ -52,7 +53,10 @@ public fun Analytics(
             factoryLog(config).warn(Code.PROCESS_NAME_UNKNOWN) { "The process name could not be determined; the main process is assumed" }
         true -> Unit
     }
-    return RubiconCore.create(config, AndroidPlatform.create(app, processInfo)) { capture ->
+    val platform = AndroidPlatform.create(app, processInfo)
+    return RubiconCore.create(config, platform) { capture ->
+        // Before the first activity starts, when called from Application.onCreate (Lifecycle 2).
+        (platform.lifecycleSource as? AndroidLifecycleSource)?.attach()
         ActivityCapture.attach(app, config.autocapture.enabled, capture)
     }
 }

@@ -99,8 +99,8 @@ rubicon-android-sdk/
     src/main/kotlin/com/rubicon/analytics/network/              RubiconNetworkInterceptor, the only okhttp3 code
     src/main/kotlin/com/rubicon/analytics/internal/android/     platform implementations
     src/test/kotlin/...                                          Robolectric (JUnit 4)
-    src/androidTest/kotlin/...                                   instrumented
-  test-app/                     not published (D10)
+  test-app/                     not published (D10): flavors full, fullV2, noStartup, noOkhttp
+  emulator-tests/               the emulator suite: JUnit here, adb, MockWebServer (step 8.1)
   docs/
     implementation-plan.md      this file
     issue-codes.md              catalogue of WARN/ERROR codes (backend item)
@@ -629,7 +629,7 @@ Split from 6.3 (too big for one pull request): the transformation of one event, 
 
 ## 11. Phase 8: Hardening and release readiness
 
-### 8.1 Test app and instrumented suite
+### 8.1 Test app and emulator suite
 
 - Build: `:test-app` (D10) with a main process, a `:remote` process service, two activities, a deep
   link, an OkHttp client with the interceptor.
@@ -728,7 +728,7 @@ release.
 | Public API 6 | `sdk-core` (JVM) and `sdk-android` | 1.1, 2.1 | Build: `sdk-core` is `kotlin("jvm")`, `sdk-android` depends on it with `api`; `BuildInfoTest`, `RobolectricSetupTest`; 2.1: `TestPlatformAccessTest` |
 | Public API 7 | Java by construction, builders, `apiCheck` | 1.1, 3.1, 3.3, 7.1 | 1.1: `explicitApi()` and `apiCheck` in `check` (gates); 3.1: `ConfigJavaTest`; 3.3: `AnalyticsJavaTest.everyMethodIsCallableFromJava` |
 | Public API 8 | Vocabulary and read-only `deviceId` | 3.3, 6.1, 6.5 | 3.3: `NoOpAnalyticsTest.Analytics has exactly the decided methods` |
-| Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3b, 6.7 | 3.3: contract in the KDoc of `Analytics`; `NoOpAnalyticsTest.calls from many threads at once never throw`; 6.1: `IdentityTest` `ordering` (identify then snapshot, calls before load in call order); 6.3b: `WriterTest`.`events from one thread are stored in call order`, `calls made before the writer started keep their order and identity`; 6.7: `StressTest` (16 threads, per-thread order, exactly once) |
+| Public API 9 | Thread-safe, non-blocking, per-thread order | 3.3, 6.3b, 6.7 | 3.3: contract in the KDoc of `Analytics`; `NoOpAnalyticsTest.calls from many threads at once never throw`; 6.1: `IdentityTest` `ordering` (identify then snapshot, calls before load in call order); 6.3b: `WriterTest`.`events from one thread are stored in call order`, `calls made before the writer started keep their order and identity`; 6.7: `StressTest` (16 threads, per-thread order, exactly once); 8.1: `EmulatorSuiteTest`.`creating the SDK on the main thread touches no disk under StrictMode` |
 | Event Model 1 | Top level, `properties`/`traits`, `context` ownership | 3.2, 6.3a | 3.2: `EventModelTest.golden files` (all); 6.3a: `EventPipelineTest`.`a track event matches the golden file`, `super properties merge, the event's own key wins` |
 | Event Model 2 | Sealed `TrackEvent`, `ScreenEvent`, `IdentifyEvent`; `type` on the wire | 3.2, 8.4 | 3.2: `EventModelTest.golden files` (all) |
 | Event Model 3 | Immutable normalized maps, validated twice | 2.5, 6.3a | 2.5: `PropertyNormalizerTest.deep copies` (all); 6.3a: `EventPipelineTest`.`an invalid property from a hook is dropped by the second validation` |
@@ -760,9 +760,9 @@ release.
 | Session 5 | `Session Started`/`Ended`, backdated with `duration_ms` | 6.2, 8.4 | 6.2: `SessionManagerTest` (each of the five end triggers) |
 | Session 6 | Persisted in `PersonStore`, resumed after restart | 4.1, 6.2 | 6.2: `SessionManagerTest` `across restarts`, `last activity`, `reset and a change of user` |
 | Lifecycle 1 | Event inventory and properties | 7.4, 7.5, 7.6, 8.4 | 7.4: `WriterTest` `app lifecycle events`, `AppLifecycleTest` `open and background`; 7.6: `RubiconNetworkInterceptorTest`.`an event carries the decided fields, without query or fragment, ids masked`, `a failed call is recorded with a short error and rethrown unchanged` |
-| Lifecycle 2 | `ProcessLifecycleOwner`, `AppInitializer` | 7.4, 8.1 | 7.4: `AndroidLifecycleSourceTest` (all); 8.1: real owner without the Startup provider |
+| Lifecycle 2 | `ProcessLifecycleOwner`, `AppInitializer`, activity counter as the fallback | 7.4, 8.1 | 7.4: `AndroidLifecycleSourceTest` (all); 8.1: `EmulatorSuiteTest`.`foreground and background produce the lifecycle events, also without the Startup provider` |
 | Lifecycle 3 | Activity screens, `@ScreenName`, `name_source` | 7.5 | `ActivityCaptureTest`.`the name is the class without Activity, or the annotation, with its source`, `the same activity resumed again in the foreground is not sent again`, `rotation is not a new screen`, `returning from the background shows the screen again` |
-| Lifecycle 4 | Install and update detection | 7.4, 8.1 | 7.4: `AppLifecycleTest` `install and update`, `AndroidLifecycleSourceTest`.`install facts come from the package` |
+| Lifecycle 4 | Install and update detection | 7.4, 8.1 | 7.4: `AppLifecycleTest` `install and update`, `AndroidLifecycleSourceTest`.`install facts come from the package`; 8.1: `EmulatorSuiteTest`.`installing a higher version code reports Application Updated with the previous version` |
 | Lifecycle 5 | Plain names, `source` `app`/`auto` | 3.2, 7.4 | 3.2: `EventModelTest.wire names`; 7.4: `WriterTest`.`foreground and background produce the decided events, automatic and inside the session` |
 | Lifecycle 6 | `Autocapture` set and defaults, `NETWORK_REQUESTS` off at once | 3.1, 5.3, 7.4, 7.6 | 3.1: `ConfigValidatorTest.default values`; 7.4: `WriterTest`.`each type follows its gate`; 7.5: `ActivityCaptureTest`.`deep links are off by default, screens on`, `CoreIntegrationTest`.`automatic events are sent with source auto, only while their type is enabled`; 7.6: `RubiconNetworkInterceptorTest`.`switching capture off applies to the next request`, `CoreIntegrationTest`.`network capture follows the configuration and the consent, and knows the SDK's host` |
 | Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3b, 6.4, 6.7 | 6.3b: `WriterTest` (single writer, channel of 1000, backpressure, conflated upload signal); 6.4: `UploaderTest`.`no two requests overlap under a burst of signals`; 6.7: `StressTest` (backpressure counted exactly under load) |
@@ -776,9 +776,9 @@ release.
 | Disk 2a | Everything under `noBackupFilesDir/rubicon/` | 4.1, 4.2, 7.1 | 4.1: `FileKeyValueStore` writes under `Platform.storageRoot`; `FileKeyValueStoreTest.files are app-private`; 7.1: `FactoryTest`.`the main process gets the real instance, with files only under no_backup` |
 | Disk 2b | Fixed-width index from the directory | 4.2 | `FileEventStoreTest.index order survives a restart and gaps` |
 | Disk 2c | One directory per key, others deleted (`api_key_changed`) | 2.3, 4.2 | 2.3: `HttpDatesAndHashingTest.sha-256` (all); 4.2: `FileEventStoreTest` `events of another API key are deleted and counted`, `a later format directory is never touched` |
-| Disk 2d | Main process only | 7.1, 8.1 | 7.1: `FactoryTest` (process name on both sides of API 28, `applicationInfo.processName` and the package fallback) |
+| Disk 2d | Main process only | 7.1, 8.1 | 7.1: `FactoryTest` (process name on both sides of API 28, `applicationInfo.processName` and the package fallback); 8.1: `EmulatorSuiteTest`.`the remote process creates no files and sends nothing` |
 | Disk 3 | JSON Lines equal to the wire event, `v1` directory | 4.2, 2.4 | 2.4: `JsonTest.reading fields` (all), `JsonTest.round trip` (a line never holds a raw line break); 4.2: `FileEventStoreTest` `the batch body` (byte for byte) |
-| Disk 4 | One `write()` per event, fsync points, `.tmp` recovery | 4.2, 7.4, 8.1, 6.3b | 4.2: `FileEventStoreTest` `leftover open segment` (truncation at every byte), `failures`; 6.3b: `WriterTest`.`backgrounding flushes and syncs` |
+| Disk 4 | One `write()` per event, fsync points, `.tmp` recovery | 4.2, 7.4, 8.1, 6.3b | 4.2: `FileEventStoreTest` `leftover open segment` (truncation at every byte), `failures`; 6.3b: `WriterTest`.`backgrounding flushes and syncs`; 8.1: `EmulatorSuiteTest`.`every event stored before the process was killed arrives, a repeat only with the same message id` |
 | Disk 5 | Corrupt lines skipped, unreadable segments retried then deleted | 4.2 | `FileEventStoreTest` `corrupt lines`, `unknown files are deleted with a warning`, `an unreadable segment is retried and deleted after three consecutive failures` |
 | Disk 6 | No encryption, storage not replaceable | 2.1 | 2.1: `EventStore`, `KeyValueStore` are `@RubiconInternal` (opt-in error for apps); `InMemoryStoresTest` |
 | Disk 7 | Atomic person and device stores with `v` | 4.1 | `FileKeyValueStoreTest` `atomic replacement`; `PersonStoreTest` and `DeviceStoreTest` (`many updates in a row produce one write`, newer `v`) |
@@ -786,7 +786,7 @@ release.
 | Serialization 2 | Conversion table, no `java.time` | 2.5, 1.1 | 1.1: `SourceScannerTest.java time rule` (all), `SourceRulesPluginTest.check fails on a planted java time import and names the file and line`; 2.5: `PropertyNormalizerTest.conversion table` (all) |
 | Serialization 3 | Size limits | 2.5, 6.3a | 2.5: `PropertyNormalizerTest` `property keys`, `string values`, `nesting depth`, `property count`, `event names`; 6.3a: `EventPipelineTest` `size limit` (exactly 32 KB kept, one byte more dropped) |
 | Serialization 4 | snake_case, epoch ms, own ISO formatter | 2.3, 3.2 | 2.3: `IsoDatesTest` (all); 3.2: `EventModelTest.golden files` |
-| Serialization 5 | Streamed body, golden files, independent parser | 2.4, 3.2, 6.4, 8.4 | 2.4: `JsonTest.round trip` (independent parser), `JsonOnAndroidTest` (Android's `org.json`); 3.2: golden `track.json`, `screen.json`, `identify.json` |
+| Serialization 5 | Streamed body, golden files, independent parser | 2.4, 3.2, 6.4, 8.4 | 2.4: `JsonTest.round trip` (independent parser), `JsonOnAndroidTest` (Android's `org.json`); 3.2: golden `track.json`, `screen.json`, `identify.json`; 8.1: `EmulatorSuiteTest`.`org json on this runtime behaves as the JSON layer expects` (API 21 and 36) |
 | HTTP 1 | `HttpURLConnection` behind `HttpTransport` | 5.1 | `HttpURLConnectionTransportTest` (all, against MockWebServer) |
 | HTTP 2 | Always gzip, `Content-Length` | 5.1 | `HttpURLConnectionTransportTest` `posts the gzipped body with a fixed length`, `a failed compression sends the body uncompressed` |
 | HTTP 3 | 15 s / 20 s / 45 s watchdog | 5.1 | `HttpURLConnectionTransportTest` `slow headers trip the read timeout`, `a server that never answers trips the watchdog` |
@@ -798,7 +798,7 @@ release.
 | Retry 3 | `Retry-After` cap and floor, poison-batch rule | 2.3, 5.2, 6.4 | 2.3: `HttpDatesAndHashingTest.http dates` (all); 5.2: `RetryPolicyTest` `Retry-After`, `poison batch`; 6.4: `UploaderTest`.`a batch is kept on failure, retried after the wait with a new sent_at` |
 | Retry 4 | 413 as configuration problem, server answers 200 | 5.2 | `RetryPolicyTest`.`status codes` (413 is CONFIG); success bodies are never read (5.1) |
 | Retry 5 | Pipeline wait and per-segment attempts persisted, clock guard | 4.1, 5.2, 6.4 | 4.1: `DeviceStoreTest.the state and the cache read back as written` (retry object); 5.2: `RetryPolicyTest` `persistence` (restart, clock moved back by a day); 6.4: `UploaderTest`.`retry state changes are handed to the writer` |
-| Retry 6 | One default-network callback, `INTERNET` without `VALIDATED` | 7.2 | `AndroidNetworkMonitorTest`.`internet without validation counts as connected`, `registers one callback at start and reads the current state` |
+| Retry 6 | One default-network callback, `INTERNET` without `VALIDATED` | 7.2 | `AndroidNetworkMonitorTest`.`internet without validation counts as connected`, `registers one callback at start and reads the current state`, `a network that comes back with onAvailable alone is seen`; 8.1: `EmulatorSuiteTest`.`nothing is uploaded offline, and the network coming back sends the events` |
 | Privacy 1 | `optOut` stops new events, queue still sends | 6.5, 7.6 | 6.5: `PrivacyTest` `opting out` |
 | Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3b, 6.5 | 4.1: `DeviceStoreTest.consent is null, granted or denied`; 6.3b: `WriterTest`.`the stores are loaded and written by the writer`; 6.5: `PrivacyTest` `the starting state` (stored choice wins, `persistConsent`, early `isOptedOut`, calls before load) |
 | Privacy 3 | `clearLocalData`, read-only `deviceId` | 6.5 | 6.5: `PrivacyTest` `clearing local data` |
@@ -846,7 +846,7 @@ release.
 - [x] 7.4 Lifecycle, install and update
 - [x] 7.5 Screens and deep links
 - [x] 7.6 HTTP call capture
-- [ ] 8.1 Test app and instrumented suite
+- [x] 8.1 Test app and emulator suite
 - [ ] 8.2 R8 and consumer rules`
 - [ ] 8.3 App without OkHttp
 - [ ] 8.4 Wire contract complete
@@ -1015,6 +1015,15 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 7.6 | What the interceptor measures | `duration_ms` from the interceptor's call to the response headers (what an application interceptor sees; the body is read by the app later). `request_bytes` and `response_bytes` are the declared lengths (`contentLength()`), left out when unknown (`-1`): no body is read. `url` keeps a non-default port. | `NetworkRequestProperties` |
 | 2026-10-01 | 7.6 | How the interceptor reaches the instance's state | `AutomaticCapture` gains `capturesNetworkRequests` (configured, not switched off remotely, collecting; read per request), `sdkHost`, `debug` and `log`. An `Analytics` that is not the SDK's (a test double, the no-op instance) has none, so the interceptor passes through (D12). | `AutomaticCapture`, `DefaultAnalytics` |
 | 2026-10-01 | 7.6 | The OkHttp source rule | `okhttp-only-in-network` in `checkSourceRules`; an `allowedIn` entry ending with `/` now exempts a directory, here `com/rubicon/analytics/network/`. | `build-logic` |
+| 2026-10-01 | 8 | One pull request for phase 8 | Steps 8.1 to 8.5 on `feature/hardening`, each committed without a review stop unless a question is open; approval only before the push and the pull request. Step 8.6 waits. Chosen by the user. | Steps 8.1 to 8.5 |
+| 2026-10-01 | 8.1 | The emulator suite is driven from this machine | JUnit tests in `:emulator-tests` drive `:test-app` through adb (install, `kill`, `svc wifi`/`svc data`, the home key, `install -r`) with MockWebServer on this machine behind `adb reverse tcp:18765`, and commands sent by broadcast. An instrumented test runs in the app's process and cannot survive killing it. `./gradlew :emulator-tests:emulatorTest`, not in `check`. Chosen by the user. | `:test-app`, `:emulator-tests` |
+| 2026-10-01 | 8.1 | API levels of the suite | API 21 (`Rubicon_API21`, `google_apis` arm64-v8a image downloaded for this) and API 36 (`Pixel8_API36`); both green. Chosen by the user. | - |
+| 2026-10-01 | 8.1 | What the process kill test kills | The app kills itself with SIGKILL as soon as the SDK has stored its 100th of 500 events, while it writes the rest. Every stored event arrives after the restart. Events still in the write channel at the kill are lost, as Queue 1 accepts. | `EmulatorSuiteTest` |
+| 2026-10-01 | 8.1 | The second process | A receiver in `:remote`, not a service: a shell cannot start a background service from API 26, and the process is what matters (Disk 2d). | `:test-app` |
+| 2026-10-01 | 8.1 | org.json on the device | `JsonProbe` in the test app runs the pinned behaviours of step 2.4 through the SDK's `Json` on the device's own `org.json`; the suite checks the results and parses each line independently (Serialization 5). Same results on API 21 and 36. | `JsonProbe` |
+| 2026-10-01 | 8.1 | Found: a returning network unseen below API 26 | Before API 26 a network that comes back may be reported by `onAvailable` alone; the monitor only handled `onCapabilitiesChanged`, so after going offline the SDK never uploaded again. `onAvailable` now reads the network's capabilities. | `AndroidNetworkMonitor` |
+| 2026-10-01 | 8.1 | Found: the first screen of a cold start outside the session | The lifecycle observer was registered from the writer, after the first activity resumed. It is now attached by the factory for a new instance, on the main thread. | `AndroidLifecycleSource`, factory |
+| 2026-10-01 | 8.1 | Found: lifecycle 2.6+ refuses the `AppInitializer` path | `ProcessLifecycleInitializer` throws when initialized lazily in lifecycle 2.6.1 (2.4.0 accepts it), and apps almost always have 2.6+. When it cannot be initialized, an activity counter takes over: 700 ms to the background (`ProcessLifecycleOwner.TIMEOUT_MS`), rotation not counted, one INFO line; `LIFECYCLE_UNAVAILABLE` only without an `Application`. Chosen by the user; Confluence Lifecycle Decisions version 3, decision 2. | `AndroidLifecycleSource` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

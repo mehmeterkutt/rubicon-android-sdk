@@ -1,6 +1,9 @@
 package com.rubicon.analytics.internal.android
 
+import android.app.Activity
+import android.app.Application
 import android.content.Context
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.lifecycle.Lifecycle
@@ -16,14 +19,17 @@ import com.rubicon.analytics.internal.platform.LifecycleSource
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Foreground and background from `ProcessLifecycleOwner` (Lifecycle 2, Session 3): `ON_START` is
- * the foreground, `ON_STOP` the background, about 700 ms after the last activity stops.
+ * Foreground and background (Lifecycle 2, Session 3): `ON_START` of `ProcessLifecycleOwner` is the
+ * foreground, `ON_STOP` the background, about 700 ms after the last activity stops.
  *
- * - [start] initializes `ProcessLifecycleInitializer` through `AppInitializer`, which does nothing if
- *   androidx Startup already ran it, so an app that removed the Startup provider still works.
- * - The observer is added on the main thread; from another thread it is posted, never waited for.
- *   Added while the app is started, it receives `ON_START` at once.
- * - If any of it fails: never in the foreground, one WARN.
+ * - [attach] runs when the SDK is created, on the main thread (posted from another thread, never
+ *   waited for), so the first activity of a cold start is already in the foreground.
+ * - It initializes `ProcessLifecycleInitializer` through `AppInitializer`, which does nothing if
+ *   androidx Startup already ran it. With the Startup provider removed, lifecycle 2.6 and later
+ *   refuse that and throw; then an activity counter takes over: the first start is the foreground,
+ *   the background comes [BACKGROUND_DELAY_MS] after the count reaches zero unless an activity
+ *   starts, and a rotation is not counted. One INFO line says so.
+ * - If neither works (no `Application`): never in the foreground, one WARN.
  */
 @RubiconInternal
 internal class AndroidLifecycleSource(
@@ -33,11 +39,24 @@ internal class AndroidLifecycleSource(
         AppInitializer.getInstance(context).initializeComponent(ProcessLifecycleInitializer::class.java)
     },
 ) : LifecycleSource {
+    private enum class Mode { NOT_ATTACHED, OWNER, FALLBACK, UNAVAILABLE }
+
     private val listeners = CopyOnWriteArrayList<LifecycleSource.Listener>()
+    private val lock = Any()
 
     @Volatile
     override var isForeground: Boolean = false
         private set
+
+    @Volatile
+    private var mode = Mode.NOT_ATTACHED
+
+    @Volatile
+    private var failure: Throwable? = null
+
+    // Guarded by lock: the instance's log once the writer started, and whether the mode was reported.
+    private var log: Log? = null
+    private var reported = false
 
     private val observer =
         LifecycleEventObserver { _, event ->
@@ -48,17 +67,52 @@ internal class AndroidLifecycleSource(
             }
         }
 
-    override fun start(log: Log) {
-        val register = Runnable { register(log) }
+    /** Starts observing; called by the factory for a new instance. */
+    fun attach() {
+        val register = Runnable { register() }
         if (Looper.myLooper() == Looper.getMainLooper()) register.run() else Handler(Looper.getMainLooper()).post(register)
     }
 
-    private fun register(log: Log) {
+    /** Gives the instance's log, for the line that reports a fallback; the writer calls it at startup. */
+    override fun start(log: Log) {
+        synchronized(lock) { this.log = log }
+        report()
+    }
+
+    private fun register() {
+        if (mode != Mode.NOT_ATTACHED) return
         try {
             initialize()
             owner().lifecycle.addObserver(observer)
+            mode = Mode.OWNER
+            return
         } catch (t: Throwable) {
-            log.warn(Code.LIFECYCLE_UNAVAILABLE, t) { "The app's foreground cannot be observed; no lifecycle events or sessions" }
+            failure = t
+        }
+        val app = context.applicationContext as? Application
+        if (app == null) {
+            mode = Mode.UNAVAILABLE
+        } else {
+            app.registerActivityLifecycleCallbacks(ActivityCounter())
+            mode = Mode.FALLBACK
+        }
+        report()
+    }
+
+    private fun report() {
+        val log =
+            synchronized(lock) {
+                val log = log ?: return
+                if (reported || mode == Mode.NOT_ATTACHED || mode == Mode.OWNER) return
+                reported = true
+                log
+            }
+        if (mode == Mode.FALLBACK) {
+            log.info {
+                "ProcessLifecycleOwner could not be initialized (androidx Startup's provider removed?); foreground is detected from activities"
+            }
+        } else {
+            log.warn(Code.LIFECYCLE_UNAVAILABLE, failure) { "The app's foreground cannot be observed; no lifecycle events or sessions" }
         }
     }
 
@@ -80,5 +134,56 @@ internal class AndroidLifecycleSource(
                 // A listener only sends a message to the writer; nothing to undo.
             }
         }
+    }
+
+    // The fallback. Activity callbacks run on the main thread, so the counts need no lock.
+    private inner class ActivityCounter : Application.ActivityLifecycleCallbacks {
+        private val handler = Handler(Looper.getMainLooper())
+        private var started = 0
+
+        // Activities stopped by a configuration change, whose new instance is about to start.
+        private var recreating = 0
+        private val background = Runnable { if (started == 0) change(false) }
+
+        override fun onActivityStarted(activity: Activity) {
+            if (recreating > 0) {
+                recreating--
+                return
+            }
+            started++
+            handler.removeCallbacks(background)
+            if (started == 1) change(true)
+        }
+
+        override fun onActivityStopped(activity: Activity) {
+            if (activity.isChangingConfigurations) {
+                recreating++
+                return
+            }
+            if (started == 0) return
+            started--
+            if (started == 0) handler.postDelayed(background, BACKGROUND_DELAY_MS)
+        }
+
+        override fun onActivityCreated(
+            activity: Activity,
+            savedInstanceState: Bundle?,
+        ): Unit = Unit
+
+        override fun onActivityResumed(activity: Activity): Unit = Unit
+
+        override fun onActivityPaused(activity: Activity): Unit = Unit
+
+        override fun onActivitySaveInstanceState(
+            activity: Activity,
+            outState: Bundle,
+        ): Unit = Unit
+
+        override fun onActivityDestroyed(activity: Activity): Unit = Unit
+    }
+
+    companion object {
+        /** `ProcessLifecycleOwner.TIMEOUT_MS`, so both paths report the background alike. */
+        const val BACKGROUND_DELAY_MS: Long = 700
     }
 }
