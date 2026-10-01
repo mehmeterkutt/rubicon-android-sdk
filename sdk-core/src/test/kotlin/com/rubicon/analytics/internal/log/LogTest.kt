@@ -334,6 +334,6 @@ class LogTest {
         NoOpLogger.log(LogLevel.ERROR, "ignored", RuntimeException())
         IssueCounter.NONE.increment(Code.HOST_BLOCKED)
 
-        assertEquals(44, Code.entries.size)
+        assertEquals(45, Code.entries.size)
     }
 }

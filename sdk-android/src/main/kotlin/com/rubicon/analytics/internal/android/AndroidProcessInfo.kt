@@ -3,8 +3,10 @@ package com.rubicon.analytics.internal.android
 import android.app.ActivityManager
 import android.app.Application
 import android.content.Context
+import android.content.pm.PackageInfo
 import android.os.Build
 import android.os.Process
+import com.rubicon.analytics.internal.platform.InstalledApp
 import com.rubicon.analytics.internal.platform.ProcessInfo
 
 /**
@@ -32,7 +34,25 @@ internal class AndroidProcessInfo(
         return current == main
     }
 
+    // On the writer, at the first foreground (Lifecycle 4).
+    override fun installedApp(): InstalledApp? =
+        try {
+            val info = context.packageManager.getPackageInfo(context.packageName, 0)
+            InstalledApp(info.versionName, versionCode(info).toString(), info.firstInstallTime, info.lastUpdateTime)
+        } catch (t: Throwable) {
+            null
+        }
+
     companion object {
+        /** `longVersionCode` from API 28, `versionCode` before; `app.build` and the install check use it. */
+        fun versionCode(info: PackageInfo): Long =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                info.versionCode.toLong()
+            }
+
         fun currentProcessName(context: Context): String? =
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

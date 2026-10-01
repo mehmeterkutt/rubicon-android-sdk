@@ -1,6 +1,7 @@
 package com.rubicon.analytics.internal.pipeline
 
 import com.rubicon.analytics.AnalyticsConfig
+import com.rubicon.analytics.Autocapture
 import com.rubicon.analytics.BeforeSend
 import com.rubicon.analytics.DropReason
 import com.rubicon.analytics.EventSource
@@ -9,6 +10,7 @@ import com.rubicon.analytics.LogLevel
 import com.rubicon.analytics.TrackEvent
 import com.rubicon.analytics.internal.context.CallTimeValues
 import com.rubicon.analytics.internal.identity.IdentityRef
+import com.rubicon.analytics.internal.platform.InstalledApp
 import com.rubicon.analytics.internal.storage.KeyValueStore
 import com.rubicon.analytics.internal.store.DeviceStore
 import com.rubicon.analytics.internal.store.PersonStore
@@ -384,10 +386,82 @@ class WriterTest {
     }
 
     @Nested
+    inner class `app lifecycle events` {
+        private fun WriterHarness.sources() = lines().map { field(it, "source") }
+
+        @Test
+        fun `foreground and background produce the decided events, automatic and inside the session`() =
+            writerTest { h ->
+                h.test.processInfo.installed = InstalledApp("1.4.0", "140", 1_000, 1_000)
+                h.writer.start()
+                h.test.lifecycleSource.moveToForeground()
+                runCurrent()
+                h.test.lifecycleSource.moveToBackground()
+                runCurrent()
+                h.test.lifecycleSource.moveToForeground()
+                runCurrent()
+
+                assertEquals(
+                    listOf(
+                        "Session Started",
+                        "Application Installed",
+                        "Application Opened",
+                        "Application Backgrounded",
+                        "Application Opened",
+                    ),
+                    h.names(),
+                )
+                assertEquals(listOf("auto"), h.sources().distinct())
+                val flushed = h.eventStore.closedSegments().flatMap { h.eventStore.segmentLines(it) }
+                assertEquals("Application Backgrounded", h.field(flushed.last(), "event"))
+                assertEquals(1, h.test.lifecycleSource.starts)
+            }
+
+        @Test
+        fun `a foreground seen at startup and replayed as a message opens once`() =
+            writerTest { h ->
+                h.test.lifecycleSource.moveToForeground()
+                h.writer.start()
+                runCurrent()
+                h.test.lifecycleSource.replayForeground()
+                runCurrent()
+
+                assertEquals(listOf("Session Started", "Application Opened"), h.names())
+            }
+
+        @Test
+        fun `each type follows its gate`() =
+            writerTest({ autocapture.enabled = setOf(Autocapture.INSTALL_UPDATE) }) { h ->
+                h.test.processInfo.installed = InstalledApp("1.4.0", "140", 1_000, 1_000)
+                h.writer.start()
+                runCurrent()
+                h.test.lifecycleSource.moveToForeground()
+                h.test.lifecycleSource.moveToBackground()
+                runCurrent()
+
+                assertEquals(listOf("Application Installed"), h.names())
+            }
+
+        @Test
+        fun `nothing is created while not collecting, but the version record is written`() =
+            writerTest { h ->
+                h.test.processInfo.installed = InstalledApp("1.4.0", "140", 1_000, 1_000)
+                h.writer.start()
+                runCurrent()
+                h.flags.stopCollecting()
+                h.test.lifecycleSource.moveToForeground()
+                runCurrent()
+
+                assertEquals(emptyList<String>(), h.names())
+                assertEquals("140", h.deviceStore.state.lastBuild)
+            }
+    }
+
+    @Nested
     inner class `session events` {
         @Test
         fun `foreground, the first event and a long background produce the session events in order`() =
-            writerTest { h ->
+            writerTest({ autocapture.enabled = setOf(Autocapture.SESSIONS) }) { h ->
                 h.writer.start()
                 h.test.lifecycleSource.moveToForeground()
                 h.track("Opened")
@@ -404,7 +478,7 @@ class WriterTest {
 
         @Test
         fun `a reset ends the session as the previous user, after earlier events`() =
-            writerTest { h ->
+            writerTest({ autocapture.enabled = setOf(Autocapture.SESSIONS) }) { h ->
                 h.writer.start()
                 h.test.lifecycleSource.moveToForeground()
                 runCurrent()

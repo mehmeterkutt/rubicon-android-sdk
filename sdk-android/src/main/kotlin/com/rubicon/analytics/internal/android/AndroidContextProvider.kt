@@ -72,7 +72,7 @@ internal class AndroidContextProvider(
         return StaticValues(
             appName = read(ContextField.APP_NAME, disabled) { context.applicationInfo.loadLabel(context.packageManager).toString() },
             appVersion = read(ContextField.APP_VERSION, disabled) { packageInfo?.versionName },
-            appBuild = read(ContextField.APP_BUILD, disabled) { packageInfo?.let { versionCode(it).toString() } },
+            appBuild = read(ContextField.APP_BUILD, disabled) { packageInfo?.let { AndroidProcessInfo.versionCode(it).toString() } },
             appNamespace = read(ContextField.APP_NAMESPACE, disabled) { context.packageName },
             deviceManufacturer = read(ContextField.DEVICE_MANUFACTURER, disabled) { Build.MANUFACTURER },
             deviceModel = read(ContextField.DEVICE_MODEL, disabled) { Build.MODEL },
@@ -260,14 +260,6 @@ internal class AndroidContextProvider(
     }
 
     private fun packageInfo(): PackageInfo? = safely { context.packageManager.getPackageInfo(context.packageName, 0) }
-
-    private fun versionCode(info: PackageInfo): Long =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            info.longVersionCode
-        } else {
-            @Suppress("DEPRECATION")
-            info.versionCode.toLong()
-        }
 
     private companion object {
         const val OS_NAME = "Android"

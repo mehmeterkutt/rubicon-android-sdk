@@ -1,6 +1,7 @@
 package com.rubicon.analytics.internal.platform
 
 import com.rubicon.analytics.RubiconInternal
+import com.rubicon.analytics.internal.log.Log
 
 /**
  * Whether the app is in the foreground, from `ProcessLifecycleOwner` on Android (Lifecycle 2).
@@ -9,6 +10,9 @@ import com.rubicon.analytics.RubiconInternal
 @RubiconInternal
 public interface LifecycleSource {
     public val isForeground: Boolean
+
+    /** Starts observing; called once by the writer at startup, before [addListener]. */
+    public fun start(log: Log)
 
     public fun addListener(listener: Listener)
 

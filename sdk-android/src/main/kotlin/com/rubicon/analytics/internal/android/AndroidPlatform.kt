@@ -5,7 +5,6 @@ import android.os.SystemClock
 import com.rubicon.analytics.internal.http.HttpTransportFactory
 import com.rubicon.analytics.internal.platform.Clock
 import com.rubicon.analytics.internal.platform.ElapsedClock
-import com.rubicon.analytics.internal.platform.LifecycleSource
 import com.rubicon.analytics.internal.platform.Platform
 import com.rubicon.analytics.internal.platform.SdkDispatchers
 import com.rubicon.analytics.internal.storage.FileEventStore
@@ -39,7 +38,7 @@ internal object AndroidPlatform {
             httpTransportFactory = HttpTransportFactory.DEFAULT,
             contextProvider = AndroidContextProvider(context, networkMonitor, elapsedClock),
             processInfo = processInfo,
-            lifecycleSource = BackgroundLifecycleSource,
+            lifecycleSource = AndroidLifecycleSource(context),
             logger = LogcatLogger,
             eventStore = FileEventStore(root),
             keyValueStore = FileKeyValueStore(root),
@@ -51,14 +50,4 @@ internal object AndroidPlatform {
     /** The name `Context.getNoBackupFilesDir()` uses inside the data directory. */
     private const val NO_BACKUP_DIR = "no_backup"
     private const val ROOT_DIR = "rubicon"
-}
-
-// A stand-in until step 7.4 replaces it in this pull request: never in the foreground.
-
-internal object BackgroundLifecycleSource : LifecycleSource {
-    override val isForeground: Boolean = false
-
-    override fun addListener(listener: LifecycleSource.Listener): Unit = Unit
-
-    override fun removeListener(listener: LifecycleSource.Listener): Unit = Unit
 }

@@ -108,6 +108,7 @@ internal class Writer(
     private lateinit var snapshot: ConfigSnapshot
     private lateinit var sessions: SessionManager
     private lateinit var pipeline: EventPipeline
+    private lateinit var appLifecycle: AppLifecycle
     private var sendsDiagnostics = true
 
     // Messages accepted into the channel and messages handled, for isIdle.
@@ -233,12 +234,15 @@ internal class Writer(
             )
         pipeline =
             EventPipeline(snapshot.beforeSend, snapshot.disabledFields, snapshot.debug, platform.contextProvider, sessions, newId, log)
+        appLifecycle = AppLifecycle(deviceStore, platform.processInfo, snapshot.autocapture)
         appendSessionEvents(sessions.start())
         appendedSinceFlush = platform.eventStore.pendingCount
         if (appendedSinceFlush > 0) startInterval()
+        platform.lifecycleSource.start(log)
         platform.lifecycleSource.addListener(lifecycleListener)
         platform.networkMonitor.addListener(networkListener)
-        if (platform.lifecycleSource.isForeground) appendSessionEvents(sessions.onForeground())
+        // A foreground signal that also arrives as a message is ignored then (AppLifecycle).
+        if (platform.lifecycleSource.isForeground) onForeground()
         persistStores()
         log.debug { "Writer started with ${platform.eventStore.pendingCount} pending events" }
     }
@@ -250,8 +254,10 @@ internal class Writer(
             is WriteMessage.Enqueue -> if (collecting) resolve(message.event)?.let { append(pipeline.process(it), it.skipsHooks) }
             WriteMessage.Flush -> flushNow("requested")
             WriteMessage.Persist -> Unit
-            WriteMessage.Foreground -> appendSessionEvents(sessions.onForeground())
+            WriteMessage.Foreground -> onForeground()
             WriteMessage.Background -> {
+                // Backgrounded goes into the session and into the background flush.
+                appLifecycle.onBackground()?.let(::appendAutomatic)
                 sessions.onBackground()
                 platform.eventStore.sync()
                 flushNow("background")
@@ -260,6 +266,30 @@ internal class Writer(
             is WriteMessage.PersonCleared -> appendSessionEvents(sessions.onPersonCleared(message.previous))
             is WriteMessage.ConsentChanged -> onConsentChanged(message.from, message.to)
             WriteMessage.ClearLocalData -> clearEvents()
+        }
+    }
+
+    private fun onForeground() {
+        appendSessionEvents(sessions.onForeground())
+        appLifecycle.onForeground()?.let(::appendAutomatic)
+    }
+
+    // Timestamped now, inside the session the pipeline opens for them (Lifecycle 4).
+    private fun appendAutomatic(events: List<AppLifecycle.AutoEvent>) {
+        if (!collecting) return
+        for (event in events) {
+            val captured =
+                CapturedEvent(
+                    CapturedEvent.Type.TRACK,
+                    event.name,
+                    event.properties,
+                    EventSource.AUTO,
+                    newId(),
+                    platform.clock.currentTimeMillis(),
+                    identity.snapshot(),
+                    platform.contextProvider.callTimeValues(snapshot.disabledFields),
+                )
+            append(pipeline.process(captured), diagnostics = false)
         }
     }
 

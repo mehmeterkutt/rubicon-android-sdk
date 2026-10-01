@@ -5,6 +5,7 @@ import com.rubicon.analytics.internal.context.CallTimeValues
 import com.rubicon.analytics.internal.context.ContextProvider
 import com.rubicon.analytics.internal.context.StaticValues
 import com.rubicon.analytics.internal.log.Log
+import com.rubicon.analytics.internal.platform.InstalledApp
 import com.rubicon.analytics.internal.platform.LifecycleSource
 import com.rubicon.analytics.internal.platform.NetworkMonitor
 import com.rubicon.analytics.internal.platform.ProcessInfo
@@ -54,6 +55,14 @@ public class FakeLifecycleSource(
         private set
     private val listeners = CopyOnWriteArrayList<LifecycleSource.Listener>()
 
+    @Volatile
+    public var starts: Int = 0
+        private set
+
+    override fun start(log: Log) {
+        starts++
+    }
+
     override fun addListener(listener: LifecycleSource.Listener) {
         listeners += listener
     }
@@ -65,6 +74,11 @@ public class FakeLifecycleSource(
     public fun moveToForeground() {
         if (isForeground) return
         isForeground = true
+        listeners.forEach { it.onForeground() }
+    }
+
+    /** What `ProcessLifecycleOwner` does for an observer added while started: `ON_START` again. */
+    public fun replayForeground() {
         listeners.forEach { it.onForeground() }
     }
 
@@ -155,6 +169,9 @@ public class FakeProcessInfo(
     override val osVersion: String = "16",
     override val apiLevel: Int = 36,
     @Volatile public var mainProcess: Boolean? = true,
+    @Volatile public var installed: InstalledApp? = null,
 ) : ProcessInfo {
     override fun isMainProcess(): Boolean? = mainProcess
+
+    override fun installedApp(): InstalledApp? = installed
 }

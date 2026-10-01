@@ -639,7 +639,9 @@ Split from 6.3 (too big for one pull request): the transformation of one event, 
   `org.json` behaviour tests of step 2.4 to run here too): kill the process while writing 500
   events, restart, every accepted event arrives, and a repeat only ever carries the same
   `message_id` (at-least-once, deduplicated by the backend); real offline and online with `svc wifi` and `svc data`; real
-  foreground and background with UiAutomator home press; the `:remote` process creates no files and
+  foreground and background with UiAutomator home press, also with androidx Startup's
+  `InitializationProvider` removed (`tools:node="remove"`) (Robolectric runs the provider and binds
+  `ProcessLifecycleOwner` to one sandbox, section 15, step 7.4); the `:remote` process creates no files and
   sends nothing; install and update event across an `adb install -r` of a higher version code;
   StrictMode `detectDiskReads` and `detectDiskWrites` with a death penalty around
   `Analytics(context, config)` on the main thread (Robolectric cannot detect them, section 15,
@@ -753,18 +755,18 @@ release.
 | Context 6 | `context.disabledFields`, never read when disabled | 3.1, 7.3, 6.3a | 3.1: `ConfigValidatorTest.default values` (18 values, no `LIBRARY_*`); 6.3a: `EventPipelineTest`.`disabled fields are passed to the provider and left out of the event`; 7.3: `AndroidContextProviderTest`.`each disabled field is left out`, `a disabled field is never read`, `a disabled carrier never touches the telephony service` |
 | Session 1 | SDK computes sessions, on every event | 6.2 | `SessionManagerTest` (every event gets the session or none) |
 | Session 2 | UUIDv7 id plus `started_at` | 6.2 | `SessionManagerTest`.`the first event in the foreground starts it` (id from the generator passed in) |
-| Session 3 | Foreground keeps alive, background never extends | 6.2, 7.4 | 6.2: `SessionManagerTest` `starting a session`, `the background countdown` |
+| Session 3 | Foreground keeps alive, background never extends | 6.2, 7.4 | 6.2: `SessionManagerTest` `starting a session`, `the background countdown`; 7.4: `AndroidLifecycleSourceTest`.`ON_START is the foreground and ON_STOP the background, each told once` |
 | Session 4 | 5 min timeout (10 s to 2 h), 12 h maximum, no timers | 3.1, 6.2 | 3.1: `ConfigValidatorTest.numeric bounds` (background timeout); 6.2: `SessionManagerTest` `maximum duration`, `a clock change while backgrounded does not count` |
 | Session 5 | `Session Started`/`Ended`, backdated with `duration_ms` | 6.2, 8.4 | 6.2: `SessionManagerTest` (each of the five end triggers) |
 | Session 6 | Persisted in `PersonStore`, resumed after restart | 4.1, 6.2 | 6.2: `SessionManagerTest` `across restarts`, `last activity`, `reset and a change of user` |
-| Lifecycle 1 | Event inventory and properties | 7.4, 7.5, 7.6, 8.4 |  |
-| Lifecycle 2 | `ProcessLifecycleOwner`, `AppInitializer` | 7.4 |  |
+| Lifecycle 1 | Event inventory and properties | 7.4, 7.5, 7.6, 8.4 | 7.4: `WriterTest` `app lifecycle events`, `AppLifecycleTest` `open and background` |
+| Lifecycle 2 | `ProcessLifecycleOwner`, `AppInitializer` | 7.4, 8.1 | 7.4: `AndroidLifecycleSourceTest` (all); 8.1: real owner without the Startup provider |
 | Lifecycle 3 | Activity screens, `@ScreenName`, `name_source` | 7.5 |  |
-| Lifecycle 4 | Install and update detection | 7.4 |  |
-| Lifecycle 5 | Plain names, `source` `app`/`auto` | 3.2, 7.4 | 3.2: `EventModelTest.wire names` |
-| Lifecycle 6 | `Autocapture` set and defaults, `NETWORK_REQUESTS` off at once | 3.1, 5.3, 7.4, 7.6 | 3.1: `ConfigValidatorTest.default values` |
+| Lifecycle 4 | Install and update detection | 7.4, 8.1 | 7.4: `AppLifecycleTest` `install and update`, `AndroidLifecycleSourceTest`.`install facts come from the package` |
+| Lifecycle 5 | Plain names, `source` `app`/`auto` | 3.2, 7.4 | 3.2: `EventModelTest.wire names`; 7.4: `WriterTest`.`foreground and background produce the decided events, automatic and inside the session` |
+| Lifecycle 6 | `Autocapture` set and defaults, `NETWORK_REQUESTS` off at once | 3.1, 5.3, 7.4, 7.6 | 3.1: `ConfigValidatorTest.default values`; 7.4: `WriterTest`.`each type follows its gate` |
 | Queue 1 | Writer and uploader coroutines, channel 1000, `Flush` message | 6.3b, 6.4, 6.7 | 6.3b: `WriterTest` (single writer, channel of 1000, backpressure, conflated upload signal); 6.4: `UploaderTest`.`no two requests overlap under a burst of signals`; 6.7: `StressTest` (backpressure counted exactly under load) |
-| Queue 2 | Flush triggers and suppression, no WorkManager | 6.3b, 6.4, 7.4 | 6.3b: `WriterTest` `flush triggers`; 6.4: `UploaderTest` `gates` |
+| Queue 2 | Flush triggers and suppression, no WorkManager | 6.3b, 6.4, 7.4 | 6.3b: `WriterTest` `flush triggers`; 6.4: `UploaderTest` `gates`; 7.4: `WriterTest`.`foreground and background produce the decided events, automatic and inside the session` (Backgrounded in the background flush) |
 | Queue 3 | 30 events or 60 s, bounds, remote only raises | 3.1, 5.3 | 3.1: `ConfigValidatorTest.numeric bounds` (flush); 5.3: `RemoteConfigTest`.`flushing can only become less frequent` |
 | Queue 4 | 100 events / 512 KB batches, oldest first, sequential | 4.2, 6.4 | 4.2: `FileEventStoreTest` `segments` (closes at 100 events and before 512 KB); 6.4: `UploaderTest`.`batches go oldest first, are deleted after 2xx, and Sent lists their ids`, `it stops at the first failure` |
 | Queue 5 | 1000 events, 3 days, drop counters | 4.2, 6.6 | 4.2: `FileEventStoreTest` `capacity`, `age limit` (exactly 3 days kept); 6.6: `DiagnosticsTest`.`comes right before a flush and resets the counters once written` |
@@ -841,7 +843,7 @@ release.
 - [x] 7.1 Factory and Android platform
 - [x] 7.2 Network monitor
 - [x] 7.3 Context provider
-- [ ] 7.4 Lifecycle, install and update
+- [x] 7.4 Lifecycle, install and update
 - [ ] 7.5 Screens and deep links
 - [ ] 7.6 HTTP call capture
 - [ ] 8.1 Test app and instrumented suite
@@ -996,6 +998,12 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 7.3 | `device.type` and `device.is_emulator` | `tv` when the UI mode is television or the device has leanback, `tablet` from a smallest width of 600 dp, otherwise `phone`. Emulator: the usual `Build` markers (fingerprint, model, manufacturer, hardware, product), as in PostHog; `Build.DEVICE` is not read. Chosen by the user. | `AndroidContextProvider`, `Emulator` |
 | 2026-10-01 | 7.3 | Network values without a callback | Without `ACCESS_NETWORK_STATE` or after a failed registration, the writer reads the carrier (and, after a failed registration, the network type) at most every 60 seconds in `refresh` (Context 2). With a callback, both are read on the callback's thread when the network or its type changes; a signal strength change does not count. Chosen by the user. | `AndroidContextProvider`, `AndroidNetworkMonitor` |
 | 2026-10-01 | 7.3 | `app.name` and `locale` sources | `app.name` is the application label (`loadLabel`) at the first read; `locale` the first locale of the app's configuration as a BCP 47 tag, `und` omitted. | `AndroidContextProvider` |
+| 2026-10-01 | 7.4 | Where the lifecycle events are made | In the core: `AppLifecycle` decides, on the writer, from the foreground and background messages; the Android side only reports `ON_START`/`ON_STOP` (`AndroidLifecycleSource`) and the package facts (`ProcessInfo.installedApp()`). A repeated foreground (the startup check and a replayed `ON_START`) opens once. Order on the first foreground: `Session Started`, `Application Installed` or `Updated`, `Application Opened`; `Application Backgrounded` is appended before the background flush. | `AppLifecycle`, `Writer` |
+| 2026-10-01 | 7.4 | `build` and `previous_build` are text | The same text as `context.app.build` and the stored record; `is_downgrade` compares them as numbers. Chosen by the user. | `AppLifecycle` |
+| 2026-10-01 | 7.4 | The version record is written on every first foreground | Whatever `INSTALL_UPDATE` and the consent say, so a later opt-in or a feature switched on later reports no false update. Not written when the package cannot be read. Chosen by the user. | `AppLifecycle` |
+| 2026-10-01 | 7.4 | `LIFECYCLE_UNAVAILABLE` | A new WARN code for a failure to observe `ProcessLifecycleOwner`: the SDK then never sees a foreground, so no lifecycle events, sessions or background flush. Added to `docs/issue-codes.md`. | `AndroidLifecycleSource` |
+| 2026-10-01 | 7.4 | The Startup provider test moves to the emulator | Robolectric runs androidx Startup's provider and keeps `ProcessLifecycleOwner` bound to the first `Application` of a sandbox, so a JVM test with the real owner depends on test order. The JVM tests inject the owner and check that `AppInitializer` runs before the observer is added; the real owner, with the provider removed, is tested in 8.1. | Steps 7.4, 8.1 |
+| 2026-10-01 | 7.4 | `LifecycleSource.start(log)` | Like the network monitor: the writer starts it at startup, so registration is posted to the main thread from there and its WARN uses the instance's log. | `LifecycleSource`, `Writer` |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |

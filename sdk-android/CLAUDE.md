@@ -30,6 +30,8 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
   `ScreenEvent`, `Deep Link Opened`, `Network Request`. No element interaction, no crash events.
 - `Autocapture` defaults (Lifecycle 6): `APP_LIFECYCLE`, `INSTALL_UPDATE`, `SESSIONS`,
   `SCREEN_VIEWS`, `NETWORK_REQUESTS` on; `DEEP_LINKS` off.
+- The core's `AppLifecycle` makes these events on the writer; this module only reports `ON_START`
+  and `ON_STOP` (`AndroidLifecycleSource`) and the package facts (`ProcessInfo.installedApp()`).
 - Foreground and background come from `ProcessLifecycleOwner`; the observer is added on the main
   thread (post if needed). Always call
   `AppInitializer...initializeComponent(ProcessLifecycleInitializer)` in case the app removed the
@@ -121,4 +123,6 @@ links, context collection, the network monitor and the OkHttp interceptor. Publi
 - Test doubles come from `testFixtures(project(":sdk-core"))`.
 - Android lint does not see the compiler's module-wide opt-in: if it reports `UnsafeOptInUsageError`
   for an internal class, mark the class `@RubiconInternal` (it is internal, so nothing leaks).
+- Never use the real `ProcessLifecycleOwner` in Robolectric: it stays bound to the first
+  `Application` of a sandbox, so such tests depend on their order. Inject a `LifecycleRegistry`.
 - Unit tests run on the debug variant only (`testDebugUnitTest`).

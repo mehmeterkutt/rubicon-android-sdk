@@ -158,4 +158,9 @@ public enum class Code {
 
     /** WARN. Registering the network callback failed; connectivity is queried before each flush. */
     NETWORK_CALLBACK_FAILED,
+
+    // Lifecycle
+
+    /** WARN. Observing the app's foreground failed; no lifecycle events, sessions or background flush. */
+    LIFECYCLE_UNAVAILABLE,
 }

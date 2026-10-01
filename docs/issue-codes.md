@@ -99,3 +99,4 @@ Each drop reason without a code of its own above (`CORRUPT_LINE`, `STORAGE_WRITE
 |---|---|---|---|
 | `NETWORK_STATE_PERMISSION_MISSING` | WARN | The app removed `ACCESS_NETWORK_STATE`; connectivity is assumed. | Retry 6, Logging 2 |
 | `NETWORK_CALLBACK_FAILED` | WARN | Registering the network callback failed; connectivity is queried before each flush. | Retry 6 |
+| `LIFECYCLE_UNAVAILABLE` | WARN | Observing the app's foreground failed; no lifecycle events, sessions or background flush. | Lifecycle 2 |
