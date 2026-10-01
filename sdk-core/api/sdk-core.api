@@ -4,6 +4,7 @@ public final class com/rubicon/analytics/AnalyticsConfig {
 	public fun <init> (Ljava/lang/String;)V
 	public final fun getApiKey ()Ljava/lang/String;
 	public final fun getAutocapture ()Lcom/rubicon/analytics/AutocaptureConfig;
+	public final fun getBeforeSend ()Ljava/util/List;
 	public final fun getContext ()Lcom/rubicon/analytics/ContextConfig;
 	public final fun getDebug ()Z
 	public final fun getFlush ()Lcom/rubicon/analytics/FlushConfig;
@@ -12,12 +13,20 @@ public final class com/rubicon/analytics/AnalyticsConfig {
 	public final fun getNetwork ()Lcom/rubicon/analytics/NetworkConfig;
 	public final fun getPrivacy ()Lcom/rubicon/analytics/PrivacyConfig;
 	public final fun getSession ()Lcom/rubicon/analytics/SessionConfig;
+	public final fun setBeforeSend (Ljava/util/List;)V
 	public final fun setDebug (Z)V
 	public final fun setHost (Ljava/lang/String;)V
 	public fun toString ()Ljava/lang/String;
 }
 
 public final class com/rubicon/analytics/AnalyticsConfig$Companion {
+}
+
+public final class com/rubicon/analytics/AppContext {
+	public final fun getBuild ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getNamespace ()Ljava/lang/String;
+	public final fun getVersion ()Ljava/lang/String;
 }
 
 public final class com/rubicon/analytics/Autocapture : java/lang/Enum {
@@ -35,6 +44,10 @@ public final class com/rubicon/analytics/Autocapture : java/lang/Enum {
 public final class com/rubicon/analytics/AutocaptureConfig {
 	public final fun getEnabled ()Ljava/util/Set;
 	public final fun setEnabled (Ljava/util/Set;)V
+}
+
+public abstract interface class com/rubicon/analytics/BeforeSend {
+	public abstract fun process (Lcom/rubicon/analytics/Event;)Lcom/rubicon/analytics/Event;
 }
 
 public final class com/rubicon/analytics/Consent : java/lang/Enum {
@@ -74,6 +87,82 @@ public final class com/rubicon/analytics/ContextField : java/lang/Enum {
 	public static fun values ()[Lcom/rubicon/analytics/ContextField;
 }
 
+public final class com/rubicon/analytics/DeviceContext {
+	public final fun getManufacturer ()Ljava/lang/String;
+	public final fun getModel ()Ljava/lang/String;
+	public final fun getType ()Ljava/lang/String;
+	public final fun isEmulator ()Ljava/lang/Boolean;
+}
+
+public final class com/rubicon/analytics/DropReason : java/lang/Enum {
+	public static final field API_KEY_CHANGED Lcom/rubicon/analytics/DropReason;
+	public static final field BACKPRESSURE Lcom/rubicon/analytics/DropReason;
+	public static final field BEFORE_SEND Lcom/rubicon/analytics/DropReason;
+	public static final field CORRUPT Lcom/rubicon/analytics/DropReason;
+	public static final field EXPIRED Lcom/rubicon/analytics/DropReason;
+	public static final field OVERSIZE Lcom/rubicon/analytics/DropReason;
+	public static final field QUEUE_FULL Lcom/rubicon/analytics/DropReason;
+	public static final field REJECTED Lcom/rubicon/analytics/DropReason;
+	public static final field RETRY_EXHAUSTED Lcom/rubicon/analytics/DropReason;
+	public static final field STORAGE_ERROR Lcom/rubicon/analytics/DropReason;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/rubicon/analytics/DropReason;
+	public static fun values ()[Lcom/rubicon/analytics/DropReason;
+}
+
+public abstract class com/rubicon/analytics/Event {
+	public abstract fun getContext ()Lcom/rubicon/analytics/EventContext;
+	public abstract fun getDeviceId ()Ljava/lang/String;
+	public abstract fun getMessageId ()Ljava/lang/String;
+	public abstract fun getSource ()Lcom/rubicon/analytics/EventSource;
+	public abstract fun getTimestamp ()J
+	public abstract fun getUserId ()Ljava/lang/String;
+}
+
+public final class com/rubicon/analytics/EventContext {
+	public final fun getApp ()Lcom/rubicon/analytics/AppContext;
+	public final fun getDevice ()Lcom/rubicon/analytics/DeviceContext;
+	public final fun getLibrary ()Lcom/rubicon/analytics/LibraryContext;
+	public final fun getLocale ()Ljava/lang/String;
+	public final fun getNetwork ()Lcom/rubicon/analytics/NetworkContext;
+	public final fun getOs ()Lcom/rubicon/analytics/OsContext;
+	public final fun getScreen ()Lcom/rubicon/analytics/ScreenContext;
+	public final fun getSession ()Lcom/rubicon/analytics/SessionContext;
+	public final fun getTimezone ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/rubicon/analytics/EventObserver {
+	public abstract fun onUpdate (Lcom/rubicon/analytics/EventUpdate;)V
+}
+
+public final class com/rubicon/analytics/EventSource : java/lang/Enum {
+	public static final field APP Lcom/rubicon/analytics/EventSource;
+	public static final field AUTO Lcom/rubicon/analytics/EventSource;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/rubicon/analytics/EventSource;
+	public static fun values ()[Lcom/rubicon/analytics/EventSource;
+}
+
+public abstract class com/rubicon/analytics/EventUpdate {
+}
+
+public final class com/rubicon/analytics/EventUpdate$Dropped : com/rubicon/analytics/EventUpdate {
+	public final fun getMessageIds ()Ljava/util/List;
+	public final fun getReason ()Lcom/rubicon/analytics/DropReason;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/rubicon/analytics/EventUpdate$Queued : com/rubicon/analytics/EventUpdate {
+	public final fun getEvent ()Lcom/rubicon/analytics/Event;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/rubicon/analytics/EventUpdate$Sent : com/rubicon/analytics/EventUpdate {
+	public final fun getMessageIds ()Ljava/util/List;
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/rubicon/analytics/FlushConfig {
 	public final fun getAt ()I
 	public final fun getImmediateEvents ()Ljava/util/Set;
@@ -81,6 +170,25 @@ public final class com/rubicon/analytics/FlushConfig {
 	public final fun setAt (I)V
 	public final fun setImmediateEvents (Ljava/util/Set;)V
 	public final fun setIntervalMs (J)V
+}
+
+public final class com/rubicon/analytics/IdentifyEvent : com/rubicon/analytics/Event {
+	public final fun copy ()Lcom/rubicon/analytics/IdentifyEvent;
+	public final fun copy (Ljava/util/Map;)Lcom/rubicon/analytics/IdentifyEvent;
+	public static synthetic fun copy$default (Lcom/rubicon/analytics/IdentifyEvent;Ljava/util/Map;ILjava/lang/Object;)Lcom/rubicon/analytics/IdentifyEvent;
+	public fun getContext ()Lcom/rubicon/analytics/EventContext;
+	public fun getDeviceId ()Ljava/lang/String;
+	public fun getMessageId ()Ljava/lang/String;
+	public fun getSource ()Lcom/rubicon/analytics/EventSource;
+	public fun getTimestamp ()J
+	public final fun getTraits ()Ljava/util/Map;
+	public fun getUserId ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/rubicon/analytics/LibraryContext {
+	public final fun getName ()Ljava/lang/String;
+	public final fun getVersion ()Ljava/lang/String;
 }
 
 public final class com/rubicon/analytics/LogLevel : java/lang/Enum {
@@ -95,9 +203,11 @@ public final class com/rubicon/analytics/LogLevel : java/lang/Enum {
 }
 
 public final class com/rubicon/analytics/LoggingConfig {
+	public final fun getEventObserver ()Lcom/rubicon/analytics/EventObserver;
 	public final fun getLevel ()Lcom/rubicon/analytics/LogLevel;
 	public final fun getLogger ()Lcom/rubicon/analytics/RubiconLogger;
 	public final fun getSendDiagnostics ()Z
+	public final fun setEventObserver (Lcom/rubicon/analytics/EventObserver;)V
 	public final fun setLevel (Lcom/rubicon/analytics/LogLevel;)V
 	public final fun setLogger (Lcom/rubicon/analytics/RubiconLogger;)V
 	public final fun setSendDiagnostics (Z)V
@@ -106,6 +216,17 @@ public final class com/rubicon/analytics/LoggingConfig {
 public final class com/rubicon/analytics/NetworkConfig {
 	public final fun getHeaders ()Ljava/util/Map;
 	public final fun setHeaders (Ljava/util/Map;)V
+}
+
+public final class com/rubicon/analytics/NetworkContext {
+	public final fun getCarrier ()Ljava/lang/String;
+	public final fun getType ()Ljava/lang/String;
+}
+
+public final class com/rubicon/analytics/OsContext {
+	public final fun getApiLevel ()Ljava/lang/Integer;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getVersion ()Ljava/lang/String;
 }
 
 public final class com/rubicon/analytics/PrivacyConfig {
@@ -122,8 +243,51 @@ public abstract interface class com/rubicon/analytics/RubiconLogger {
 	public abstract fun log (Lcom/rubicon/analytics/LogLevel;Ljava/lang/String;Ljava/lang/Throwable;)V
 }
 
+public final class com/rubicon/analytics/ScreenContext {
+	public final fun getDensity ()Ljava/lang/Double;
+	public final fun getHeight ()Ljava/lang/Integer;
+	public final fun getWidth ()Ljava/lang/Integer;
+}
+
+public final class com/rubicon/analytics/ScreenEvent : com/rubicon/analytics/Event {
+	public final fun copy ()Lcom/rubicon/analytics/ScreenEvent;
+	public final fun copy (Ljava/lang/String;)Lcom/rubicon/analytics/ScreenEvent;
+	public final fun copy (Ljava/lang/String;Ljava/util/Map;)Lcom/rubicon/analytics/ScreenEvent;
+	public static synthetic fun copy$default (Lcom/rubicon/analytics/ScreenEvent;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Lcom/rubicon/analytics/ScreenEvent;
+	public fun getContext ()Lcom/rubicon/analytics/EventContext;
+	public fun getDeviceId ()Ljava/lang/String;
+	public fun getMessageId ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getProperties ()Ljava/util/Map;
+	public fun getSource ()Lcom/rubicon/analytics/EventSource;
+	public fun getTimestamp ()J
+	public fun getUserId ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/rubicon/analytics/SessionConfig {
 	public final fun getBackgroundTimeoutMs ()J
 	public final fun setBackgroundTimeoutMs (J)V
+}
+
+public final class com/rubicon/analytics/SessionContext {
+	public final fun getId ()Ljava/lang/String;
+	public final fun getStartedAt ()J
+}
+
+public final class com/rubicon/analytics/TrackEvent : com/rubicon/analytics/Event {
+	public final fun copy ()Lcom/rubicon/analytics/TrackEvent;
+	public final fun copy (Ljava/lang/String;)Lcom/rubicon/analytics/TrackEvent;
+	public final fun copy (Ljava/lang/String;Ljava/util/Map;)Lcom/rubicon/analytics/TrackEvent;
+	public static synthetic fun copy$default (Lcom/rubicon/analytics/TrackEvent;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Lcom/rubicon/analytics/TrackEvent;
+	public fun getContext ()Lcom/rubicon/analytics/EventContext;
+	public fun getDeviceId ()Ljava/lang/String;
+	public fun getMessageId ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getProperties ()Ljava/util/Map;
+	public fun getSource ()Lcom/rubicon/analytics/EventSource;
+	public fun getTimestamp ()J
+	public fun getUserId ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
 }
 

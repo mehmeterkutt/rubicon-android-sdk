@@ -145,8 +145,8 @@ rules are in the root `CLAUDE.md`.
 - Only the internal conversion layer (`internal/json/Json.kt`) touches `org.json`: `JSONObject.NULL`
   for null (a Kotlin null removes the key); read with typed checks, never `opt*` defaults; nothing
   may depend on key order (Serialization 1). Tests compare
-  structurally and parse every line with an independent parser; golden files per event type are the
-  backend contract (Serialization 5).
+  structurally and parse every line with an independent parser; golden files per event type
+  (`src/test/resources/golden`, written by `EventWire`) are the backend contract (Serialization 5).
 
 ## HTTP and retry
 
