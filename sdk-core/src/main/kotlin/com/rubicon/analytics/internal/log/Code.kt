@@ -113,6 +113,12 @@ public enum class Code {
     /** WARN. A serialized event was larger than 32 KB; it was dropped (`oversize`). */
     EVENT_OVERSIZE,
 
+    /** WARN. The server rejected a batch as malformed (400, 422, other 4xx); it was deleted (`rejected`). */
+    BATCH_REJECTED,
+
+    /** WARN. A batch failed 10 times while others were accepted; it was deleted (`retry_exhausted`). */
+    RETRY_EXHAUSTED,
+
     // Upload
 
     /** WARN. The host resolves to a local address, as ad blockers and private DNS do. */

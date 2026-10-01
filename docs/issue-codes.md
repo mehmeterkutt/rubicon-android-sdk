@@ -75,6 +75,8 @@ Each drop reason without a code of its own above (`CORRUPT_LINE`, `STORAGE_WRITE
 | `API_KEY_CHANGED` | WARN | Events tracked with another API key were deleted at startup (`api_key_changed`). | Disk 2c |
 | `BACKPRESSURE` | WARN | The write channel was full and an event was dropped (`backpressure`). | Queue 1 |
 | `EVENT_OVERSIZE` | WARN | A serialized event was larger than 32 KB and was dropped (`oversize`). | Serialization 3 |
+| `BATCH_REJECTED` | WARN | The server rejected a batch as malformed (400, 422 or another 4xx of group D); it was deleted (`rejected`). | Retry 1 |
+| `RETRY_EXHAUSTED` | WARN | A batch failed 10 times while other batches were accepted; it was deleted (`retry_exhausted`). | Retry 3 |
 
 ## Upload
 
