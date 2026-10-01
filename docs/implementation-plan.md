@@ -772,11 +772,11 @@ release.
 | HTTP 4 | Sealed `HttpResult`, never throws | 5.1 | `HttpURLConnectionTransportTest` `responses`, `Retry-After`, `failures` (each `FailureKind`) |
 | HTTP 5 | Bearer key, User-Agent, no redirects | 5.1 | `HttpURLConnectionTransportTest` `custom headers never replace the SDK's own`, `a redirect is not followed` |
 | HTTP 6 | No transport extras, blocked-host check | 5.1 | `HttpURLConnectionTransportTest` `BLOCKED, logged once`, `localhost and IP hosts are never checked`, `bodies are never logged` |
-| Retry 1 | Five groups, only a bad batch deleted | 5.2 |  |
-| Retry 2 | Backoff table with jitter, 1 h for configuration problems | 5.2 |  |
-| Retry 3 | `Retry-After` cap and floor, poison-batch rule | 2.3, 5.2, 6.4 | 2.3: `HttpDatesAndHashingTest.http dates` (all) |
-| Retry 4 | 413 as configuration problem, server answers 200 | 5.2 |  |
-| Retry 5 | Pipeline wait and per-segment attempts persisted, clock guard | 4.1, 5.2 | 4.1: `DeviceStoreTest.the state and the cache read back as written` (retry object) |
+| Retry 1 | Five groups, only a bad batch deleted | 5.2 | `RetryPolicyTest` `classification` (one row per code and kind), `configuration problems` |
+| Retry 2 | Backoff table with jitter, 1 h for configuration problems | 5.2 | `RetryPolicyTest` `backoff`, `network regained`, `pause one hour plus or minus 20 percent` |
+| Retry 3 | `Retry-After` cap and floor, poison-batch rule | 2.3, 5.2, 6.4 | 2.3: `HttpDatesAndHashingTest.http dates` (all); 5.2: `RetryPolicyTest` `Retry-After`, `poison batch` |
+| Retry 4 | 413 as configuration problem, server answers 200 | 5.2 | `RetryPolicyTest`.`status codes` (413 is CONFIG); success bodies are never read (5.1) |
+| Retry 5 | Pipeline wait and per-segment attempts persisted, clock guard | 4.1, 5.2 | 4.1: `DeviceStoreTest.the state and the cache read back as written` (retry object); 5.2: `RetryPolicyTest` `persistence` (restart, clock moved back by a day) |
 | Retry 6 | One default-network callback, `INTERNET` without `VALIDATED` | 7.2 |  |
 | Privacy 1 | `optOut` stops new events, queue still sends | 6.5, 7.6 |  |
 | Privacy 2 | Stored choice beats default, applied in the writer | 4.1, 6.3, 6.5 | 4.1: `DeviceStoreTest.consent is null, granted or denied` |
@@ -809,7 +809,7 @@ release.
 - [x] 4.1 Key-value stores
 - [x] 4.2 Event store
 - [x] 5.1 HTTP transport
-- [ ] 5.2 Retry policy and backoff
+- [x] 5.2 Retry policy and backoff
 - [ ] 5.3 Remote configuration
 - [ ] 6.1 Identity and super properties
 - [ ] 6.2 Session
@@ -915,6 +915,12 @@ decisions. One row each: date, step, question, answer, pages or rules updated.
 | 2026-10-01 | 5.1 | When a host counts as blocked | Every address it resolves to is loopback or any-local; one public address means it is not blocked. | - |
 | 2026-10-01 | 5.1 | JDK and Android differences in tests | On the JDK an empty error body gives no error stream (`null`), and a 401 to a streamed request withholds its body; tests accept `null` there. Android returns the body. | - |
 | 2026-10-01 | 5.1 | Test-only dependency | `okhttp-tls` 4.12 for the held certificate of the TLS test. | `gradle/libs.versions.toml` |
+| 2026-10-01 | 5.2 | Codes for `rejected` and `retry_exhausted` (as agreed in 4.2) | `BATCH_REJECTED` and `RETRY_EXHAUSTED`, both WARN. | `Code`, `docs/issue-codes.md` |
+| 2026-10-01 | 5.2 | The poison batch rule in practice (Retry 3) | A segment with 5 or more consecutive group B failures is tried after the others, so the next batch goes first. A success of any other batch proves the server works; a proven suspect is deleted at its 10th failure. Proof lives in memory: after a restart a suspect is not deleted until another batch succeeds again. A lone failing batch is never deleted. | `RetryPolicy` |
+| 2026-10-01 | 5.2 | What groups C and D do to the table | Group C with `Retry-After` neither advances the table nor counts against the batch; without it, it uses and advances the table like group B. Group D deletes at once, with no wait and the table unchanged. Group E keeps the table position. | `RetryPolicy` |
+| 2026-10-01 | 5.2 | The clock guard at restore (Retry 5) | A stored wait is cut to the longest of its kind from now (10 minutes for B, 1 hour for C and E). The longest jittered waits (up to 15 minutes for B, 72 for E) are cut too after a restart; the next attempt then follows its own backoff. | `RetryPolicy` |
+| 2026-10-01 | 5.2 | Who logs a configuration problem | The policy logs `UPLOAD_UNAUTHORIZED`, `UPLOAD_ENDPOINT_MISSING`, `UPLOAD_TOO_LARGE`, `UPLOAD_NOT_SUPPORTED` and `TLS_FAILED`; the transport already logs redirects, blocked hosts and unexpected errors (5.1). Every code once per process (Logging 2). | `RetryPolicy` |
+| 2026-10-01 | 5.2 | Writing the retry state | The policy changes `DeviceStore` in memory; the writer persists it (6.3, 6.4), as every store write goes through the writer (Queue 1). | - |
 | 2026-09-30 | 2.1 | Shape of the `Platform` interfaces | Minimal signatures from the decisions; the step that implements each one may refine it (`EventStore` in 4.2, `HttpTransport` in 5.1 and 5.3, `NetworkMonitor` in 7.2, `ContextProvider` in 7.3, `LifecycleSource` in 7.4). They are internal, so a change is not an API change. | - |
 | 2026-09-30 | 1.1 | Build JDK | JDK 17 through `gradle/gradle-daemon-jvm.properties`; Gradle 8.14.3 does not run on JDK 25 and newer. | - |
 | 2026-09-30 | 1.1 | OkHttp 5.x test version | 5.4.0, the newest 5.x that builds with `compileSdk` 36 (5.5.0 requires 37 and a newer AGP). Revisit when AGP is raised. | - |
