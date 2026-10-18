@@ -332,7 +332,8 @@ ANDROID_SERIAL=emulator-5554 ./gradlew :emulator-tests:emulatorTest # with an em
 
 The design decisions, the plan and the rules for contributors are in
 [`docs/implementation-plan.md`](docs/implementation-plan.md) and the `CLAUDE.md` files; the wire
-format for the backend is in [`docs/wire-format.md`](docs/wire-format.md).
+format for the backend is in [`docs/wire-format.md`](docs/wire-format.md). Every flow the SDK
+implements is drawn in [`docs/diagrams`](docs/diagrams/README.md).
 
 `master` holds releases, `develop` the next release. Work happens on `feature/<topic>` branches from
 `develop`, merged by squash through a pull request.
