@@ -20,7 +20,7 @@ code is written here; read them before changing anything.
 Apps add one dependency, `sdk-android`, which brings `sdk-core`; no separate artifact for optional
 features (Public API 6). Android code lives only in `:sdk-android`; when `:sdk-core` needs the
 platform (clock, storage directory, connectivity) it gets an interface that `:sdk-android` implements.
-The demo app and its fake backend are a separate repository (`rubicon-team/rubicon-android-demo`).
+The demo app and its fake backend are a separate repository (`mehmeterkutt/rubicon-android-demo`).
 
 ## Commands
 
