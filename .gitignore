@@ -9,3 +9,6 @@
 /*/build/
 local.properties
 captures/
+
+# Internal working plan, kept locally only
+docs/implementation-plan.md

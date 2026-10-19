@@ -3,12 +3,9 @@
 Analytics SDK for Android in Kotlin. This file and each module's `CLAUDE.md` are the contract for how
 code is written here; read them before changing anything.
 
-- The design is decided in Confluence (space SD, "Analytics SDK Design Decisions", page 3112961;
-  Atlassian MCP, `cloudId` `rubiconn.atlassian.net`) and is binding. A pointer such as (Queue 4) means
-  decision 4 on the Queue with Flush Policy page; page ids are in section 1 of
-  `docs/implementation-plan.md`. The reasoning lives there, not here.
-- Work follows `docs/implementation-plan.md`: read its "Working agreement" and "Status" at the start
-  of every session and take the first unchecked step.
+- The design is fixed in a set of decision pages kept outside this repository and is binding. A
+  pointer such as (Queue 4) means decision 4 on the Queue with Flush Policy page. The reasoning
+  lives there, not here.
 - Never decide something the decisions do not cover: stop and ask, with options and a recommendation.
 
 ## Modules

@@ -1,9 +1,8 @@
 # How the SDK works, in diagrams
 
 Every flow the SDK implements, drawn from the code and the design decisions. The diagrams are
-Mermaid; GitHub and most IDEs render them. Pointers such as (Queue 4) name the decision in
-Confluence ("Analytics SDK Design Decisions"; page ids in section 1 of
-[the implementation plan](../implementation-plan.md)). When the code changes a flow, the diagram
+Mermaid; GitHub and most IDEs render them. Pointers such as (Queue 4) name a design decision;
+the decision pages are kept outside this repository. When the code changes a flow, the diagram
 changes in the same pull request.
 
 | File | Diagram | Shows | Decisions |

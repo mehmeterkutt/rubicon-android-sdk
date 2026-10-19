@@ -330,8 +330,7 @@ Needs JDK 17 (Gradle picks it through `gradle/gradle-daemon-jvm.properties`) and
 ANDROID_SERIAL=emulator-5554 ./gradlew :emulator-tests:emulatorTest # with an emulator running
 ```
 
-The design decisions, the plan and the rules for contributors are in
-[`docs/implementation-plan.md`](docs/implementation-plan.md) and the `CLAUDE.md` files; the wire
+The rules for contributors are in the `CLAUDE.md` files; the wire
 format for the backend is in [`docs/wire-format.md`](docs/wire-format.md). Every flow the SDK
 implements is drawn in [`docs/diagrams`](docs/diagrams/README.md).
 

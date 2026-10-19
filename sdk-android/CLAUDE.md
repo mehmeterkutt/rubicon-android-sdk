@@ -3,7 +3,7 @@
 The Android side: the factory, the Android `Platform` implementations, lifecycle, screens, deep
 links, context collection, the network monitor and the OkHttp interceptor. Public API lives in
 `com.rubicon.analytics`, the interceptor in `com.rubicon.analytics.network`, implementations in
-`com.rubicon.analytics.internal.android`. Pointers such as (Lifecycle 3) name the Confluence decision.
+`com.rubicon.analytics.internal.android`. Pointers such as (Lifecycle 3) name the design decision.
 
 ## Factory and process
 
